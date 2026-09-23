@@ -148,6 +148,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -File build\build-apk.ps1
 - **头像资源**：`powershell -File build\生成头像资源.ps1 -Source <你的方形头像>`，
   会同时生成 Windows 用的圆形 PNG（编进 EXE）和安卓各密度用的 JPEG。
 
+### 仓库结构
+
+```
+SICAU-AutoLogin/
+├── README.md / 开发笔记.md           使用说明 / 开发说明（含踩过的坑）
+├── Windows使用手册.docx / 安卓使用手册.docx
+├── build/                            ★ 所有源码和构建工具
+│   ├── App.cs / Core.cs / Ui.cs      Windows 端（C#，csc 编译）
+│   ├── apk-src/                      安卓端（Java，aapt2 + javac + d8 手搓打包）
+│   ├── jvmtest/                      桌面测试台（不用手机就能验证安卓逻辑）
+│   └── build-win.ps1 / build-apk.ps1 ★ 两个构建脚本
+└── android/                          安卓产物落到这里（不进版本库，发布走 Releases）
+```
+
 ### 不用手机也能验证安卓逻辑
 
 认证协议那块（`SicauAuth.java` / `Http.java` / `AppLog.java`）**不依赖任何 `android.*` API**，
