@@ -132,20 +132,20 @@ SICAU-win-<版本>.exe --hotspot repair             修复热点
 需要的东西：
 
 - **Windows 版**：.NET Framework 4.x 自带的 `csc.exe`（Windows 上本来就有，**不用装任何东西**）
-- **安卓版**：JDK 8+ 和 Android SDK 的 build-tools 35.0.0（放在 `.build\sdk` 下，构建脚本会自己找）
+- **安卓版**：JDK 8+ 和 Android SDK 的 build-tools 35.0.0（放在 `build\sdk` 下，构建脚本会自己找）
 
 ```powershell
 # Windows：编译并更新项目根目录那份 EXE，顺便校正开机自启快捷方式
-powershell -NoProfile -ExecutionPolicy Bypass -File .build\build-win.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File build\build-win.ps1
 
 # 安卓：打包签名，产物落到 android\SICAU-android-<版本>.apk
-powershell -NoProfile -ExecutionPolicy Bypass -File .build\build-apk.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File build\build-apk.ps1
 ```
 
 - **发版改版本号**：Windows 改 `build-win.ps1` 顶部的 `$VER` 和 `Core.cs` 里的 `AppVersion`；
   安卓改 `apk-src\AndroidManifest.xml` 的 `versionCode` + `versionName`。构建脚本会自动改名并删掉旧版本的包。
-- **安卓签名**：用 `.build\sicau.keystore`。**你自己发布一定要换成自己的 keystore**，否则升级安装会签名冲突。
-- **头像资源**：`powershell -File .build\生成头像资源.ps1 -Source <你的方形头像>`，
+- **安卓签名**：用 `build\sicau.keystore`。**你自己发布一定要换成自己的 keystore**，否则升级安装会签名冲突。
+- **头像资源**：`powershell -File build\生成头像资源.ps1 -Source <你的方形头像>`，
   会同时生成 Windows 用的圆形 PNG（编进 EXE）和安卓各密度用的 JPEG。
 
 ### 不用手机也能验证安卓逻辑
@@ -154,8 +154,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .build\build-apk.ps1
 可以在电脑上的 JVM 里跑真实认证；WiFi 名字解析/匹配那部分有 69 项单元测试：
 
 ```powershell
-$J = '.build\jvmtest'
-javac -encoding UTF-8 -d "$J\out" .build\apk-src\WifiPlan.java "$J\WifiPlanTest.java"
+$J = 'build\jvmtest'
+javac -encoding UTF-8 -d "$J\out" build\apk-src\WifiPlan.java "$J\WifiPlanTest.java"
 java -Dfile.encoding=UTF-8 -cp "$J\out" WifiPlanTest
 ```
 

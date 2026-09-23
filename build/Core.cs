@@ -63,7 +63,7 @@ namespace Sicau
         public const string AuthorName = "极夜光";
         /// <summary>作者邮箱。</summary>
         public const string AuthorMail = "yeguang225@outlook.com";
-        /// <summary>头像嵌在 EXE 里的资源名片段（图片本体是 .build\avatar.png，由 生成头像资源.ps1 生成）。</summary>
+        /// <summary>头像嵌在 EXE 里的资源名片段（图片本体是 build\avatar.png，由 生成头像资源.ps1 生成）。</summary>
         public const string AvatarResource = "avatar";
         public const string UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 

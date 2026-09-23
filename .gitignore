@@ -1,11 +1,11 @@
-# ---- Android SDK（500 MB，别传上去；要自己打包就放一份在 .build\sdk）----
-.build/sdk/
+# ---- Android SDK（500 MB，别传上去；要自己打包就放一份在 build\sdk）----
+build/sdk/
 
 # ---- 构建中间产物 ----
-.build/apk-out/
-.build/*.exe
-.build/*.apk
-.build/jvmtest/out/
+build/apk-out/
+build/*.exe
+build/*.apk
+build/jvmtest/out/
 *.class
 
 # ---- 编译出来的程序本体（发布走 Releases，不进版本库）----
@@ -16,7 +16,7 @@ android/*.apk
 android/*.apk.idsig
 
 # ---- 签名密钥与口令：自己发布请换成自己的 ----
-.build/sicau.keystore
+build/sicau.keystore
 
 # ---- 调试用的临时文件 ----
 *.tmp

@@ -2,7 +2,7 @@
 #  生成「极夜光」的个人标识资源
 #
 #  从一张正方形头像生成两套资源:
-#    · Windows : .build\avatar.png          (128px 圆头像, 编译时嵌进 EXE 的「关于」对话框)
+#    · Windows : build\avatar.png          (128px 圆头像, 编译时嵌进 EXE 的「关于」对话框)
 #    · Android : apk-src\res\drawable-*\ic_avatar.png   (各密度一份, 主界面标题区显示)
 #
 #  用法: powershell -NoProfile -ExecutionPolicy Bypass -File 生成头像资源.ps1 -Source <一张正方形图片>
@@ -26,8 +26,8 @@ if (-not $Source) {
 }
 if (-not $Source -or -not (Test-Path $Source)) {
     Write-Host '没有可用的头像源图。用法:'
-    Write-Host '  powershell -File .build\生成头像资源.ps1 -Source "D:\我的头像.jpg"'
-    Write-Host '或者把源图命名为 avatar-source.jpg 放到 .build\ 目录下再直接运行本脚本。'
+    Write-Host '  powershell -File build\生成头像资源.ps1 -Source "D:\我的头像.jpg"'
+    Write-Host '或者把源图命名为 avatar-source.jpg 放到 build\ 目录下再直接运行本脚本。'
     exit 1
 }
 Write-Host ('源图: ' + $Source)

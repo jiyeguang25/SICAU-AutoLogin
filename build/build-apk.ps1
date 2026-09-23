@@ -50,7 +50,7 @@ Write-Host ('JDK: ' + $JDKP)
 # ---- 检查 Android SDK ----
 if (-not (Test-Path ($BT + '\aapt2.exe'))) {
     Write-Host ('FAILED 找不到 Android SDK (构建工具): ' + $BT)
-    Write-Host '  需要 build-tools 35.0.0 和 platforms/android-34, 放到 .build\sdk\ 下面。'
+    Write-Host '  需要 build-tools 35.0.0 和 platforms/android-34, 放到 build\sdk\ 下面。'
     Write-Host '  用 Android Studio 的 SDK Manager 装完, 把 sdk 目录整个复制过来就行。'
     Write-Host '  注意: 必须用 build-tools 35.0.0 —— 34.0.0 自带的 d8 在这个工程上会内部报错(R8 的 bug)。'
     exit 1

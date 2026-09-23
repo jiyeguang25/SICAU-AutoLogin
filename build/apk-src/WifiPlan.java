@@ -8,7 +8,7 @@ import java.util.List;
  * WiFi 目标名字的解析与判断。
  *
  * 特意做成「不依赖任何 android.* 类」的纯 Java, 这样能直接在电脑上的 JVM 里跑单元测试
- * (桌面测试台见 .build\jvmtest\WifiPlanTest.java), 不用真机。
+ * (桌面测试台见 build\jvmtest\WifiPlanTest.java), 不用真机。
  *
  * 为什么支持多个名字: 校园网可能同时存在 i_sicau_wifi6 和 i_sicau_wifi 之类的名字,
  * 用户不该为了换一个名字再改一次设置。
