@@ -43,6 +43,6 @@
 
 ---
 
-源码、编译方法、踩过的坑都在仓库里：见 [README](https://github.com/yeguang225/SICAU-AutoLogin-四川农业大学校园网登录系统#readme) 和 `开发笔记.md`。
+源码、编译方法、踩过的坑都在仓库里：见 [README](https://github.com/yeguang225/SICAU-AutoLogin#readme) 和 `开发笔记.md`。
 
 作者 **极夜光** · yeguang225@outlook.com
