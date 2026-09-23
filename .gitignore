@@ -8,7 +8,10 @@
 .build/jvmtest/out/
 *.class
 
-# ---- 安卓构建出来的东西（Release 里发，不进版本库）----
+# ---- 编译出来的程序本体（发布走 Releases，不进版本库）----
+/SICAU-win-*.exe
+
+# ---- 安卓构建出来的东西（发布走 Releases，不进版本库）----
 android/*.apk
 android/*.apk.idsig
 
