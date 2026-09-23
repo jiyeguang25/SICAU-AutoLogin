@@ -1,0 +1,20 @@
+# 统一换行符，避免 Windows/Linux 协作时整文件 diff
+* text=auto eol=lf
+
+# 这些必须保持二进制，别被当文本处理
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.ico  binary
+*.docx binary
+*.apk  binary
+*.exe  binary
+*.keystore binary
+
+# 对外文档在 GitHub 上按 Markdown 显示，diff 里也算文本
+*.md   text eol=lf
+*.ps1  text eol=lf
+*.cs   text eol=lf
+*.java text eol=lf
+*.xml  text eol=lf
+*.txt  text eol=lf
