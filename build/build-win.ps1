@@ -32,11 +32,33 @@ $md5 = (Get-FileHash $TMP -Algorithm MD5).Hash.Substring(0,12)
 Write-Host ('  EXE OK: ' + $sz + ' KB   MD5=' + $md5)
 
 Write-Host '=== 2) 放到程序运行的位置(项目根目录) ==='
+# 放之前先签名：未签名 + 无信誉的 exe，Windows 会弹
+# 「已保护你的电脑 / 发布者: 发布者未知」（要点"仍要运行"）。
+# 签名工具在 DSH\tools\ 下，两个项目共用；证书不存在时只提示，不算构建失败。
+$signer = Join-Path (Split-Path (Split-Path $D -Parent) -Parent) 'tools\Sign-DshApp.ps1'
+if (Test-Path -LiteralPath $signer) {
+    Write-Host '  签名中...'
+    # 真证书（SSL.com 学生包那张）到手后不用改这里：把主题关键字写进环境变量
+    #   setx DSH_CODESIGN_FILTER "SSL.com"
+    # 签名工具会自动优先用它；没设就走本机自签名兜底。
+    $signArgs = @('-Path', $TMP)
+    if ($env:DSH_CODESIGN_FILTER) {
+        $signArgs += @('-CertSubjectFilter', $env:DSH_CODESIGN_FILTER)
+        Write-Host ('  使用真证书, 主题关键字: ' + $env:DSH_CODESIGN_FILTER)
+    }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $signer @signArgs
+    if ($LASTEXITCODE -ne 0) { Write-Host '  签名失败(EXE 仍可用, 只是会继续弹 SmartScreen)' }
+} else {
+    Write-Host ('  签名工具不在, 跳过: ' + $signer)
+}
+
 try {
     Copy-Item $TMP $APP -Force
     $h2 = (Get-FileHash $APP -Algorithm MD5).Hash.Substring(0,12)
     Write-Host ('  已部署到 ' + $APP)
-    Write-Host ('  与编译产物一致=' + ($md5 -eq $h2))
+    # 注意：$md5 是"签名之前"算的，签完名 exe 会变，所以这里不一致是正常的，
+    # 不代表复制出错。真正要一致的是"根目录那份和 build 目录那份"（都签过之后）。
+    Write-Host ('  与签名前的编译产物一致=' + ($md5 -eq $h2) + ' (签名会改文件, 不一致属正常)')
 } catch {
     Write-Host ('  复制失败(程序可能正开着): ' + $_.Exception.Message.Split([char]10)[0])
 }
