@@ -56,7 +56,7 @@ namespace Sicau
     {
         public const string AppName = "SICAU-AutoLogin";
         /// <summary>版本号：只在「关于」和卸载列表里显示用。改版时同时改 build-win.ps1 的 $VER。</summary>
-        public const string AppVersion = "1.7";
+        public const string AppVersion = "1.8";
 
         // ---- 作者标识（用户要求在程序里带上自己的标识）----
         /// <summary>作者网名。</summary>
@@ -1054,7 +1054,18 @@ namespace Sicau
         /// <summary>读取当前热点配置(SSID/密码/频段/状态)。</summary>
         public static bool GetHotspotInfo(out string ssid, out string pass, out string band, out string state, out int clients)
         {
-            ssid = ""; pass = ""; band = ""; state = ""; clients = 0;
+            string ignored;
+            return GetHotspotInfo(out ssid, out pass, out band, out state, out clients, out ignored);
+        }
+
+        /// <summary>
+        /// 同上, 但多带一个 <paramref name="failure"/>: 读失败时的原因（脚本里 error= 那行）。
+        /// 以前读失败是"一声不响"返回 false, 界面上只说"读不到"，用户完全不知道为什么。
+        /// </summary>
+        public static bool GetHotspotInfo(out string ssid, out string pass, out string band,
+                                          out string state, out int clients, out string failure)
+        {
+            ssid = ""; pass = ""; band = ""; state = ""; clients = 0; failure = "";
             try
             {
                 string o = RunHotspot("info");
@@ -1070,9 +1081,18 @@ namespace Sicau
                     else if (k == "band") band = v;
                     else if (k == "state") state = v;
                     else if (k == "clients") int.TryParse(v, out clients);
+                    else if (k == "error") failure = v;
+                }
+
+                if (ssid.Length == 0 && failure.Length == 0)
+                {
+                    // 脚本没吐出 ssid 也没说原因: 把原始输出带上, 方便定位
+                    failure = string.IsNullOrEmpty(o)
+                        ? "热点脚本没有任何输出（可能被安全软件拦了，或 powershell.exe 起不来）"
+                        : ("热点脚本输出看不懂: " + o.Replace("\r\n", " | ").Replace("\n", " | "));
                 }
             }
-            catch { }
+            catch (Exception ex) { failure = ex.Message; }
             return ssid.Length > 0;
         }
 
@@ -1105,10 +1125,36 @@ namespace Sicau
             {
                 string ps = LoadEmbedded("HotspotScript");
                 if (ps == null) return "找不到内置热点脚本";
-                string tmp = Path.Combine(Path.GetTempPath(), "sicau-hotspot-" + Guid.NewGuid().ToString("N") + ".ps1");
-                File.WriteAllText(tmp, ps, new UTF8Encoding(true));
+
+                // 把脚本落到**程序自己的配置目录**（%APPDATA%\SICAU-AutoLogin\hotspot.ps1），不用临时目录。
+                // 原因：%TEMP% 里的 .ps1 容易被"临时文件清理器"扫掉、也可能被安全软件拦（写进去会报"访问被拒绝"）；
+                // 而配置目录是这个程序一直在用的地方，读写一定有权限。内容没变就不重写，省得每次跑都动文件。
+                string scriptPath = null;
+                string why = "";
+                try
+                {
+                    string target = Path.Combine(Dir, "hotspot.ps1");
+                    bool needWrite = true;
+                    try
+                    {
+                        if (File.Exists(target) &&
+                            File.ReadAllText(target, Encoding.UTF8) == ps) needWrite = false;
+                    }
+                    catch { }
+                    if (needWrite) File.WriteAllText(target, ps, new UTF8Encoding(true));
+                    scriptPath = target;
+                }
+                catch (Exception ex)
+                {
+                    // 配置目录写不了就退回临时目录（老做法）
+                    why = "配置目录写不了(" + ex.Message + ")，改用临时目录; ";
+                    string tmp = Path.Combine(Path.GetTempPath(), "sicau-hotspot-" + Guid.NewGuid().ToString("N") + ".ps1");
+                    File.WriteAllText(tmp, ps, new UTF8Encoding(true));
+                    scriptPath = tmp;
+                }
+
                 var psi = new ProcessStartInfo("powershell.exe",
-                    "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"" + tmp + "\" " + action)
+                    "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"" + scriptPath + "\" " + action)
                 {
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
@@ -1119,8 +1165,17 @@ namespace Sicau
                 };
                 var p = Process.Start(psi);
                 string outp = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
-                p.WaitForExit(60000);
-                try { File.Delete(tmp); } catch { }
+                if (!p.WaitForExit(60000))
+                {
+                    try { p.Kill(); } catch { }
+                    Log("热点脚本超过 60 秒没返回，已结束它", "WARN");
+                }
+                // 只有落在临时目录的那份才需要删；配置目录那份留着当缓存
+                if (scriptPath.IndexOf(Path.GetTempPath(), StringComparison.OrdinalIgnoreCase) == 0)
+                {
+                    try { File.Delete(scriptPath); } catch { }
+                }
+                if (why.Length > 0) Log(why.TrimEnd(' ', ';'), "WARN");
                 return outp.Trim();
             }
             catch (Exception ex) { return "热点操作失败: " + ex.Message; }

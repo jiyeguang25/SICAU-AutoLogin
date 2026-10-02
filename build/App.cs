@@ -1530,11 +1530,13 @@ namespace Sicau
             string wantBand = c.HotspotBand;
             Task.Run(() =>
             {
-                string sysSsid, sysPass, sysBand, sysState;
+                string sysSsid, sysPass, sysBand, sysState, why;
                 int sysClients;
-                if (!Core.GetHotspotInfo(out sysSsid, out sysPass, out sysBand, out sysState, out sysClients))
+                if (!Core.GetHotspotInfo(out sysSsid, out sysPass, out sysBand, out sysState, out sysClients, out why))
                 {
-                    AppendLog("读不到系统热点配置, 本次不改动热点(避免误重置)");
+                    AppendLog("读不到系统热点配置, 本次不改动热点(避免误重置)。原因: " + why);
+                    AppendLog("（可以先点一下「热点状态」重试；还是不行就在点之前先等两秒——"
+                              + "如果你刚在系统「设置」里改过热点的名称或密码，系统要一两秒才切换完）");
                     return;
                 }
                 AppendLog("系统当前热点: " + sysSsid + "   频段 " + sysBand);
@@ -1577,12 +1579,14 @@ namespace Sicau
         {
             Task.Run(() =>
             {
-                string ssid, pass, band, state;
+                string ssid, pass, band, state, why;
                 int clients;
-                bool ok = Core.GetHotspotInfo(out ssid, out pass, out band, out state, out clients);
+                bool ok = Core.GetHotspotInfo(out ssid, out pass, out band, out state, out clients, out why);
                 if (!ok)
                 {
-                    AppendLog("读不到热点配置（可能没有无线网卡，或无线服务未开启）");
+                    AppendLog("读不到热点配置。原因: " + why);
+                    AppendLog("（点「热点状态」可以重试一次；如果你刚在系统「设置」里改过热点名称或密码，"
+                              + "等一两秒再点——系统要一点时间切换）");
                     return;
                 }
                 curHotspotSsid = ssid;
