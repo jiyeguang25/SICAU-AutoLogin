@@ -56,7 +56,7 @@ namespace Sicau
     {
         public const string AppName = "SICAU-AutoLogin";
         /// <summary>版本号：只在「关于」和卸载列表里显示用。改版时同时改 build-win.ps1 的 $VER。</summary>
-        public const string AppVersion = "1.8";
+        public const string AppVersion = "1.9";
 
         // ---- 作者标识（用户要求在程序里带上自己的标识）----
         /// <summary>作者网名。</summary>
@@ -113,25 +113,78 @@ namespace Sicau
         static readonly object logLock = new object();
         public static Action<string> OnLog;
 
-        public static void Log(string msg, string level = "INFO")
+        /// <summary>
+        /// 实际在写的那个日志文件。正常就是 %APPDATA% 里那份;
+        /// 写不进去(目录被清掉/权限被改/安全软件拦)时退到 TEMP 或程序目录, 并把退到哪儿记下来。
+        /// 为什么要有这个: 2026-10-06 排查事故时发现, 原来 Log 把写失败的异常全吞了 ——
+        /// 日志写不进去的时候程序从外面看就是"什么都没干", 一点线索都没有。
+        /// </summary>
+        public static string LogPathInUse = "";
+        static bool logFallbackWarned = false;
+
+        public static string CurrentLogPath()
         {
-            string line = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " [" + level + "] " + msg;
-            if (OnLog != null) { try { OnLog(line); } catch { } }
+            return string.IsNullOrEmpty(LogPathInUse) ? LogPath : LogPathInUse;
+        }
+
+        /// <summary>主日志写不了时的备选位置, 按顺序试。</summary>
+        static string[] LogFallbacks()
+        {
+            var list = new List<string>();
+            try { list.Add(Path.Combine(Path.GetTempPath(), AppName + ".log")); } catch { }
+            try
+            {
+                string d = CurrentExeDir();
+                if (!string.IsNullOrEmpty(d)) list.Add(Path.Combine(d, AppName + ".log"));
+            }
+            catch { }
+            return list.ToArray();
+        }
+
+        /// <summary>往指定文件追加一行; 成功 true。任何异常都只是 false, 不往外抛。</summary>
+        static bool TryAppendLog(string path, string line)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
             try
             {
                 lock (logLock)
                 {
-                    if (File.Exists(LogPath) && new FileInfo(LogPath).Length > 512 * 1024)
+                    if (File.Exists(path) && new FileInfo(path).Length > 512 * 1024)
                     {
-                        var all = File.ReadAllLines(LogPath);
+                        var all = File.ReadAllLines(path);
                         var tail = all.Skip(Math.Max(0, all.Length - 400));
-                        File.WriteAllLines(LogPath, tail, new UTF8Encoding(true));
+                        File.WriteAllLines(path, tail, new UTF8Encoding(true));
                     }
-                    File.AppendAllText(LogPath, line + Environment.NewLine, new UTF8Encoding(true));
+                    File.AppendAllText(path, line + Environment.NewLine, new UTF8Encoding(true));
                 }
-                MaybePruneLog();
+                return true;
             }
-            catch { }
+            catch { return false; }
+        }
+
+        public static void Log(string msg, string level = "INFO")
+        {
+            string line = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " [" + level + "] " + msg;
+            if (OnLog != null) { try { OnLog(line); } catch { } }
+
+            if (TryAppendLog(CurrentLogPath(), line)) { MaybePruneLog(); return; }
+
+            // 主日志写不进去: 换个地方写, 并且把"换过了"这件事本身记下来
+            foreach (var alt in LogFallbacks())
+            {
+                if (string.Equals(alt, CurrentLogPath(), StringComparison.OrdinalIgnoreCase)) continue;
+                if (!TryAppendLog(alt, line)) continue;
+                string was = CurrentLogPath();
+                LogPathInUse = alt;
+                if (!logFallbackWarned)
+                {
+                    logFallbackWarned = true;
+                    TryAppendLog(alt, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
+                                      + " [WARN] 原日志位置写不进去(" + was + "), 已改用 " + alt);
+                }
+                return;
+            }
+            // 哪儿都写不进去: 至少让界面上的日志区(OnLog)能看到这行
         }
 
         /// <summary>日志保留小时数(0 = 不自动删)。LoadCfg/SaveCfg 会同步它。</summary>
@@ -154,18 +207,18 @@ namespace Sicau
             if (hours <= 0) return 0;
             try
             {
-                if (!File.Exists(LogPath)) return 0;
+                if (!File.Exists(CurrentLogPath())) return 0;
                 DateTime cut = DateTime.Now.AddHours(-hours);
                 var keep = new List<string>();
                 int dropped = 0;
-                foreach (var raw in File.ReadAllLines(LogPath))
+                foreach (var raw in File.ReadAllLines(CurrentLogPath()))
                 {
                     DateTime ts;
                     if (TryParseLogTime(raw, out ts) && ts < cut) { dropped++; continue; }
                     keep.Add(raw);
                 }
                 if (dropped == 0) return 0;
-                lock (logLock) File.WriteAllLines(LogPath, keep, new UTF8Encoding(true));
+                lock (logLock) File.WriteAllLines(CurrentLogPath(), keep, new UTF8Encoding(true));
                 return dropped;
             }
             catch { return 0; }
@@ -1267,6 +1320,70 @@ namespace Sicau
         public static void DisableAutostart()
         {
             try { File.Delete(AutostartLnk()); } catch { }
+        }
+
+        /// <summary>读一条快捷方式现在指向哪个文件; 读不到就返回 null。</summary>
+        public static string ShortcutTarget(string lnkPath)
+        {
+            try
+            {
+                if (!File.Exists(lnkPath)) return null;
+                Type shType = Type.GetTypeFromProgID("WScript.Shell");
+                if (shType == null) return null;
+                object shell = Activator.CreateInstance(shType);
+                object lnk = shType.InvokeMember("CreateShortcut", System.Reflection.BindingFlags.InvokeMethod, null, shell, new object[] { lnkPath });
+                object t = lnk.GetType().InvokeMember("TargetPath", System.Reflection.BindingFlags.GetProperty, null, lnk, null);
+                return t == null ? null : t.ToString();
+            }
+            catch { return null; }
+        }
+
+        /// <summary>
+        /// 开机自启是不是坏的? 返回 "" 表示没问题, 否则是人话描述的问题。
+        /// 2026-10-06 的事故就是这个: 程序放在「下载」文件夹里, 下载目录被整个清空之后,
+        /// 启动文件夹的快捷方式还指着那个已经不存在的 exe —— 开机什么都不发生, 也没有任何提示,
+        /// 用户只会觉得"这工具突然用不了了"。
+        /// </summary>
+        public static string AutostartProblem()
+        {
+            try
+            {
+                string lnk = AutostartLnk();
+                if (!File.Exists(lnk)) return "";                     // 本来就没开自启, 不算问题
+                string target = ShortcutTarget(lnk);
+                if (string.IsNullOrEmpty(target)) return "开机自启快捷方式读不出指向";
+                if (!File.Exists(target)) return "开机自启指向的程序已经不在了: " + target;
+                string me = CurrentExe();
+                if (!string.IsNullOrEmpty(me) && !string.Equals(target, me, StringComparison.OrdinalIgnoreCase))
+                    return "开机自启指向的是另一个程序: " + target;
+                return "";
+            }
+            catch (Exception ex) { return "检查开机自启失败: " + ex.Message; }
+        }
+
+        /// <summary>
+        /// 自愈: 开机自启指向的文件已经不存在时, 把快捷方式指回当前这个程序。
+        /// 只在"目标确实不存在"时动手 —— 指向另一个还活着的程序时只提示不擅自改,
+        /// 免得用户"跑的是别处的副本"时被悄悄改了自启。
+        /// 返回 "" 表示没动/不用动, 否则返回已修复的说明(调用方负责写日志)。
+        /// </summary>
+        public static string RepairAutostartIfDangling()
+        {
+            try
+            {
+                string lnk = AutostartLnk();
+                if (!File.Exists(lnk)) return "";
+                string target = ShortcutTarget(lnk);
+                if (string.IsNullOrEmpty(target) || File.Exists(target)) return "";
+                string me = CurrentExe();
+                if (string.IsNullOrEmpty(me) || !File.Exists(me)) return "";
+                if (string.Equals(target, me, StringComparison.OrdinalIgnoreCase)) return "";
+                string msg;
+                if (!EnableAutostart(me, LoadCfg().AutoHotspot, out msg))
+                    return "开机自启已失效(原指向 " + target + "), 自动重写也失败了: " + msg;
+                return "开机自启原本指向已不存在的 " + target + ", 已自动改指回 " + me;
+            }
+            catch { return ""; }
         }
 
         /// <summary>

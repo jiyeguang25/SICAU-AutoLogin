@@ -1,7 +1,7 @@
-OUT|C:\Users\yeguang\DSH\SICAU-AutoLogin\安卓使用手册.docx
+﻿OUT|C:\Users\yeguang\DSH\SICAU-AutoLogin\安卓使用手册.docx
 TITLE|校园网自动认证 安卓版使用手册
 SUB|四川农业大学  ·  portal.sicau.edu.cn
-META|适用系统：Android 6.0 及以上          版本：1.8
+META|适用系统：Android 6.0 及以上          版本：1.9
 
 H1|一、这个工具解决什么问题
 P|手机连上校园 WiFi 之后，还得再打开浏览器跳到认证页面、输入学号和密码，才能真正上网。更麻烦的是：锁屏一段时间、走出宿舍再回来、或者手机自动换了网络，认证就掉了，又得重新登一遍。
@@ -20,7 +20,7 @@ N|两边设置项不完全一样，是因为两个系统的能力不同：安卓
 H1|三、安装
 H2|3.1 拿到安装包
 P|安装包在电脑上的位置是：
-C|C:\Users\yeguang\DSH\SICAU-AutoLogin\android\SICAU-android-1.8.apk
+C|C:\Users\yeguang\DSH\SICAU-AutoLogin\android\SICAU-android-1.9.apk
 P|把这个 apk 文件传到手机上，用哪种方式都行：
 B|用数据线连电脑，直接复制到手机存储
 B|通过微信或 QQ 的「文件传输助手」发给自己

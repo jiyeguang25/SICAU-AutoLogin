@@ -1,7 +1,7 @@
-OUT|C:\Users\yeguang\DSH\SICAU-AutoLogin\Windows使用手册.docx
+﻿OUT|C:\Users\yeguang\DSH\SICAU-AutoLogin\Windows使用手册.docx
 TITLE|校园网自动认证 使用手册
 SUB|四川农业大学  ·  portal.sicau.edu.cn
-META|适用系统：Windows 11 / Windows 10          版本 1.8
+META|适用系统：Windows 11 / Windows 10          版本 1.9
 
 H1|一、这个工具解决什么问题
 P|在学校里，每次开机、每次换到新的教学楼或宿舍，都要手动打开认证页面、输入学号和密码，才能上网。这个工具把这一步自动化了。
@@ -13,7 +13,7 @@ N|它只做「自动填表提交」这一件事。你的密码只保存在本机
 
 H1|二、30 秒快速上手
 P|只需要三步，之后开机就不用再管了。
-B|第一步：双击 SICAU-win-1.8.exe 打开程序（文件名里的 1.7 就是版本号，以后看到数字更大的就是新版）
+B|第一步：双击 SICAU-win-1.9.exe 打开程序（文件名里的数字就是版本号，以后看到数字更大的就是新版）
 B|第二步：在「学号」「密码」两栏填好你的校园网账号
 B|第三步：标题栏右上角的「认证成功后」保持默认的「自动退出程序」，点「保存并应用」
 P|看到状态栏提示「已保存，开机自动认证已启用」，就配置完成了。
@@ -22,7 +22,7 @@ H1|三、安装与首次配置
 H2|3.1 放在哪里
 B|建议放在一个固定的目录里，整个文件夹一起搬就行（程序、配置、日志都在里面）
 B|程序放在哪都能跑。用界面底部的「安装到其他目录」可以换个地方，它会自动搬家，并把开机自启一起指过去
-B|你的电脑上程序就在项目文件夹里，文件名是 SICAU-win-1.8.exe
+B|你的电脑上程序就在项目文件夹里，文件名是 SICAU-win-1.9.exe
 H2|3.2 首次运行向导
 P|第一次打开程序会弹出一个向导窗口。上半部分是「环境检测」，自动列出你的网络环境；下半部分让你填账号。
 T|检测项;含义;不正常时怎么办||无线网卡;有没有可用的无线网卡;显示「未检测到」说明机器没有无线网卡，热点功能用不了，但认证不受影响||无线连接;当前连着的 WiFi 名称和 IP;显示「未连接」而你又用无线，说明得先连上校园 WiFi||有线连接;有线的 IPv4 地址;显示「未连接」而你又用有线，检查一下网线||网络状态;「已联通」表示现在能上网;「未认证」是正常的，认证完就会变
@@ -93,7 +93,7 @@ P|一般用不到。如果你喜欢折腾，或者在写脚本，可以看看。
 T|参数;作用||--auto;执行一次认证后按「认证成功后」的设置收尾。开机自启用的就是这个||--auto --hotspot-on-boot;同上，另外认证成功后把移动热点打开（自启快捷方式里带的就是这个）||--install 目录;安装到指定目录并重建快捷方式||--uninstall;卸载（删除自启快捷方式、快捷方式、程序文件）||--yes / -y;卸载时不再弹确认框||--hotspot status;查看热点状态||--hotspot on;开热点||--hotspot off;关热点||--hotspot info;输出热点配置（供程序解析）||--hotspot set -Ssid 名字 -Pass 密码;修改热点名称和密码||--hotspot band -Band TwoPointFourGigahertz;设置热点频段||--hotspot repair;修复热点
 
 H1|十二、文件都在哪
-T|内容;位置||程序本体;C:\Users\yeguang\DSH\SICAU-AutoLogin\SICAU-win-1.8.exe||配置文件;%APPDATA%\SICAU-AutoLogin\config.conf||运行日志;%APPDATA%\SICAU-AutoLogin\autologin.log||开机自启;%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\校园网自动认证.lnk
+T|内容;位置||程序本体;C:\Users\yeguang\DSH\SICAU-AutoLogin\SICAU-win-1.9.exe||配置文件;%APPDATA%\SICAU-AutoLogin\config.conf||运行日志;%APPDATA%\SICAU-AutoLogin\autologin.log||开机自启;%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\校园网自动认证.lnk
 P|%APPDATA% 通常就是 C:\Users\你的用户名\AppData\Roaming。在界面上点「打开配置目录」可以直接跳过去。
 
 H1|十三、常见问题

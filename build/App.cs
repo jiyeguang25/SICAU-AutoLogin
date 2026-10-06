@@ -116,6 +116,16 @@ namespace Sicau
                 Core.Log("开机自动认证: 静默认证, 成功后"
                          + (trayMode ? "留在托盘继续监测" : "直接退出") + ", 失败才弹窗");
 
+                // 开机自启坏了(指向的程序被删掉/被搬走)要留下痕迹, 并顺手指回当前程序
+                try
+                {
+                    string fixedMsg = Core.RepairAutostartIfDangling();
+                    if (!string.IsNullOrEmpty(fixedMsg)) Core.Log(fixedMsg, "WARN");
+                    string problem = Core.AutostartProblem();
+                    if (!string.IsNullOrEmpty(problem)) Core.Log("开机自启有问题: " + problem, "WARN");
+                }
+                catch { }
+
                 // 计划任务已经不再延迟启动了(原来登录后要等 20 秒), 所以这里自己等网卡就绪:
                 // 一般是开机后 2~6 秒就好, 比固定等 20 秒快得多, 也不会在没网时就白认证一次。
                 var bootWatch = System.Diagnostics.Stopwatch.StartNew();
@@ -200,6 +210,17 @@ namespace Sicau
                     wiz.ShowDialog();
                 }
             }
+
+            // 开主界面之前先看一眼开机自启是不是坏的: 用户手动双击打开时,
+            // 界面下方的日志区里就能直接看到原因(见 Core.AutostartProblem 的说明)
+            try
+            {
+                string fixedMsg = Core.RepairAutostartIfDangling();
+                if (!string.IsNullOrEmpty(fixedMsg)) Core.Log(fixedMsg, "WARN");
+                string problem = Core.AutostartProblem();
+                if (!string.IsNullOrEmpty(problem)) Core.Log("开机自启有问题: " + problem, "WARN");
+            }
+            catch { }
 
             Application.Run(new MainForm());
         }
