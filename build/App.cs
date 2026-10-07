@@ -884,6 +884,7 @@ namespace Sicau
             Dwm.SetTitleBarDark(Handle, Theme.Dark);
             RefreshTrayStateAsync();       // 探一次网络, 决定托盘图标蓝还是红
             StartTrayTimer();              // 留在托盘时按周期自动复检
+            HookPowerEvents();             // 睡眠/断网恢复后立刻复检(见 WakeCheck)
         }
 
         /// <summary>标题栏右边用的「小标签 + 下拉框」, 标签跟下拉框垂直居中。</summary>
@@ -1257,8 +1258,58 @@ namespace Sicau
                 };
                 trayTimer.Start();
                 AppendLog("已开启周期复检: 每 " + mins + " 分钟一次");
+                Core.Log("已开启周期复检: 每 " + mins + " 分钟一次");   // AppendLog 只进界面, 文件里也要留一条
             }
             catch { }
+        }
+
+        // ------------------------------------------------ 睡眠/断网恢复后立刻复检
+        // 合盖=睡眠。醒来后门户会话已经作废, 但网卡自始至终是 up 的, 所以
+        // NetworkChange 不一定会报; 而"开机自动认证"一辈子只在开机那一刻做过一次。
+        // 以前醒来发现没网, 只能手动点「立即认证」。现在:
+        //   1) 订阅系统电源事件, 一从睡眠/休眠恢复就立刻复检;
+        //   2) 顺带订阅网络可用事件, 网线拔了再插上也算;
+        //   3) 托盘周期定时器不动, 继续当兜底。
+        bool powerHooked = false;
+        DateTime lastWakeCheck = DateTime.MinValue;
+
+        /// <summary>恢复后复检。10 秒防抖: 唤醒瞬间网卡会连着报好几次事件。</summary>
+        void WakeCheck(string why)
+        {
+            try
+            {
+                if (busy) return;
+                var c = Core.LoadCfg();
+                if (!WantTray(c.BootMode)) return;   // 静默退出模式没有常驻进程, 轮不到这里
+                var now = DateTime.Now;
+                if ((now - lastWakeCheck).TotalSeconds < 10) return;
+                lastWakeCheck = now;
+                Core.Log(why + " → 立即复检");
+                DoAuthAsync(true);
+            }
+            catch { }
+        }
+
+        void HookPowerEvents()
+        {
+            if (powerHooked) return;
+            powerHooked = true;
+            try
+            {
+                Microsoft.Win32.SystemEvents.PowerModeChanged += (s, e) =>
+                {
+                    if (e.Mode != Microsoft.Win32.PowerModes.Resume) return;
+                    // 事件在 SystemEvents 自己的线程上, 得回到 UI 线程(DoAuthAsync 要碰控件)
+                    try { BeginInvoke(new Action(() => WakeCheck("检测到从睡眠/休眠恢复"))); } catch { }
+                };
+                System.Net.NetworkInformation.NetworkChange.NetworkAvailabilityChanged += (s, e) =>
+                {
+                    if (!e.IsAvailable) return;
+                    try { BeginInvoke(new Action(() => WakeCheck("网络重新可用"))); } catch { }
+                };
+                Core.Log("已挂上睡眠恢复复检(醒来立刻认证)");
+            }
+            catch (Exception ex) { Core.Log("挂睡眠恢复复检失败: " + ex.Message, "WARN"); }
         }
 
         // ------------------------------------------------ 检查周期可用性
