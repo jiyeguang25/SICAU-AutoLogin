@@ -149,15 +149,25 @@ namespace Sicau
                 Core.Log("开机认证共耗时 " + bootWatch.ElapsedMilliseconds + " ms");
                 try { Process.GetCurrentProcess().PriorityClass = ProcessPriorityClass.Normal; } catch { }
 
+                bool hotspotBootFailed = false;
                 if (hotspotOnBoot && ok)
                 {
                     Core.Log("登录后自动开启移动热点");
+                    bool started = false;
                     try
                     {
                         string r = Core.RunHotspot("on");
                         if (!string.IsNullOrEmpty(r)) Core.Log(r.Replace("\r\n", " | ").Replace("\n", " | "));
+                        started = MainForm.HotspotLooksOn(r);
                     }
                     catch (Exception ex) { Core.Log("热点启动失败: " + ex.Message, "WARN"); }
+                    if (!started)
+                    {
+                        // 开机那一刻系统的"连接配置"列表常常还没就绪, 这一炮打空很正常。
+                        // 别就此算了: 记下来, 等界面起来后按 60 秒一次补试(见 StartHotspotRetry)。
+                        hotspotBootFailed = true;
+                        Core.Log("这次没开成热点, 稍后自动补试", "WARN");
+                    }
                 }
 
                 Application.EnableVisualStyles();
@@ -172,7 +182,7 @@ namespace Sicau
                         return;
                     }
                     Core.Log("认证成功, 收束到托盘继续监测");
-                    Application.Run(new MainForm { StartHidden = true });
+                    Application.Run(new MainForm { StartHidden = true, RetryHotspotOnBoot = hotspotBootFailed });
                     return;
                 }
 
@@ -419,6 +429,11 @@ namespace Sicau
         public bool StartHidden = false;
         Color lastStatusColor = SystemColors.ControlText;
         bool busy = false;
+        int trayTicks = 0;   // 周期复检跑了几轮, 用来每隔几轮强制认证一次(见 StartTrayTimer)
+        /// <summary>开机那次开热点没成功时置 true: 等系统稳下来再补试几次(见 StartHotspotRetry)。</summary>
+        public bool RetryHotspotOnBoot = false;
+        System.Windows.Forms.Timer hotspotRetryTimer;
+        int hotspotRetryLeft = 0;
 
         static readonly Font FontUI = new Font("Microsoft YaHei UI", 9F);
         static readonly Font FontTitle = new Font("Microsoft YaHei UI", 13F, FontStyle.Bold);
@@ -885,6 +900,7 @@ namespace Sicau
             RefreshTrayStateAsync();       // 探一次网络, 决定托盘图标蓝还是红
             StartTrayTimer();              // 留在托盘时按周期自动复检
             HookPowerEvents();             // 睡眠/断网恢复后立刻复检(见 WakeCheck)
+            if (RetryHotspotOnBoot) { RetryHotspotOnBoot = false; StartHotspotRetry(); }   // 只有开机那次开热点失败才用
         }
 
         /// <summary>标题栏右边用的「小标签 + 下拉框」, 标签跟下拉框垂直居中。</summary>
@@ -1243,22 +1259,89 @@ namespace Sicau
         {
             try
             {
-                if (trayTimer != null) { trayTimer.Stop(); trayTimer.Dispose(); trayTimer = null; }
                 var c = Core.LoadCfg();
                 int mins = c.IntervalMinutes;
-                if (mins <= 0) return;
+                if (mins <= 0)
+                {
+                    if (trayTimer != null) { trayTimer.Stop(); trayTimer.Dispose(); trayTimer = null; }
+                    return;
+                }
+                // 周期没变就别重建: OnHandleCreated 和 SetVisibleCore 都会调到这里,
+                // 重建一次就多刷一行"已开启周期复检", 日志里看着像起了两个定时器。
+                if (trayTimer != null && trayTimer.Interval == mins * 60000) return;
 
+                if (trayTimer != null) { trayTimer.Stop(); trayTimer.Dispose(); trayTimer = null; }
+                trayTicks = 0;
                 trayTimer = new System.Windows.Forms.Timer();
                 trayTimer.Interval = mins * 60000;
                 trayTimer.Tick += (s, e) =>
                 {
                     if (busy) return;
-                    AppendLog("按周期(" + mins + " 分钟)自动复检");
-                    DoAuthAsync(true);
+                    trayTicks++;
+                    // 以前这里是无条件 DoAuthAsync(true): 每 5 分钟就往门户 POST 一次,
+                    // 日志里全是"此IP已在线请勿重复认证"。现在:
+                    //   - 平时只做一次"还通不通"的自检, 通就什么都不做(不发 POST、不打扰网络);
+                    //   - 每 6 轮(默认半小时)强制认证一次当兜底 —— 门户会话偶尔会"看着还在"地失效,
+                    //     而本地探测在强制门户上可能被骗过去(劫持页也能回 200)。
+                    bool force = (trayTicks % 6) == 0;
+                    AppendLog(force ? ("按周期(" + mins + " 分钟)强制复检一次(兜底)")
+                                    : ("按周期(" + mins + " 分钟)检查网络"));
+                    DoAuthAsync(force);
                 };
                 trayTimer.Start();
-                AppendLog("已开启周期复检: 每 " + mins + " 分钟一次");
-                Core.Log("已开启周期复检: 每 " + mins + " 分钟一次");   // AppendLog 只进界面, 文件里也要留一条
+                AppendLog("已开启周期复检: 每 " + mins + " 分钟一次(有网就跳过, 每 6 轮强制一次)");
+                Core.Log("已开启周期复检: 每 " + mins + " 分钟一次(有网就跳过, 每 6 轮强制一次)");   // AppendLog 只进界面, 文件里也要留一条
+            }
+            catch { }
+        }
+
+        /// <summary>脚本输出算不算"热点开起来了"(开机那条命令行也要用, 所以是 public static)。</summary>
+        public static bool HotspotLooksOn(string so)
+        {
+            if (string.IsNullOrEmpty(so)) return false;
+            return so.IndexOf("已开启热点", StringComparison.Ordinal) >= 0
+                || so.IndexOf("已经是开启状态", StringComparison.Ordinal) >= 0;
+        }
+
+        /// <summary>
+        /// 开机那次开热点失败后的补试(60 秒一次, 最多 8 次 = 覆盖开机后 1~8 分钟)。
+        /// 为什么要补: 开机那一刻 WinRT 的"连接配置"列表经常还是空的(或者 GetInternetConnectionProfile
+        /// 直接报 Access is denied), 那时候谁都开不起来; 等系统的网络管家起来就好了。
+        /// 不放在热点脚本里干等, 是因为 Core.RunHotspot 有 60 秒子进程超时, 等太久会被砍掉。
+        /// </summary>
+        void StartHotspotRetry()
+        {
+            try
+            {
+                if (hotspotRetryTimer != null) { hotspotRetryTimer.Stop(); hotspotRetryTimer.Dispose(); }
+                const int maxTries = 8;          // 8 次 × 60 秒 = 覆盖开机后 1~8 分钟
+                hotspotRetryLeft = maxTries;
+                hotspotRetryTimer = new System.Windows.Forms.Timer();
+                hotspotRetryTimer.Interval = 60000;
+                hotspotRetryTimer.Tick += (s, e) =>
+                {
+                    if (hotspotRetryLeft <= 0) { hotspotRetryTimer.Stop(); return; }
+                    hotspotRetryLeft--;
+                    int nth = maxTries - hotspotRetryLeft;
+                    try { if (!Core.LoadCfg().AutoHotspot) { hotspotRetryTimer.Stop(); return; } } catch { }
+                    AppendLog("补试开启移动热点(第 " + nth + "/" + maxTries + " 次)");
+                    Task.Run(() =>
+                    {
+                        string r = "";
+                        try { r = Core.RunHotspot("on"); }
+                        catch (Exception ex) { r = "热点操作失败: " + ex.Message; }
+                        string one = r.Replace("\r\n", " | ").Replace("\n", " | ");
+                        bool ok2 = HotspotLooksOn(r);
+                        try { Core.Log("补试开热点(" + nth + "/" + maxTries + "): " + one, ok2 ? "INFO" : "WARN"); } catch { }
+                        if (ok2)
+                        {
+                            try { BeginInvoke(new Action(() => { try { if (hotspotRetryTimer != null) hotspotRetryTimer.Stop(); } catch { } })); }
+                            catch { }
+                        }
+                    });
+                };
+                hotspotRetryTimer.Start();
+                Core.Log("开热点补试已排上: 每 60 秒一次, 最多 " + maxTries + " 次");
             }
             catch { }
         }

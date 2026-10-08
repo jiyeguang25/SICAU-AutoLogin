@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Position = 0)][ValidateSet('on','off','toggle','status','set','band','repair','info')][string]$Action = 'status',
     [string]$Ssid,
     [string]$Pass,
@@ -55,52 +55,85 @@ function Band-Text {
 # 现在改成: 先挑有互联网的、且**不是**热点虚拟网卡(本地连接* / Wi-Fi Direct)的连接;
 # 挑不到再退回默认连接。
 function Get-Mgr {
+    $script:MgrDiag = ''
+    $script:MgrPick = ''
     $profiles = $null
-    try { $profiles = [Windows.Networking.Connectivity.NetworkInformation]::GetConnectionProfiles() } catch { }
+    $enumErr = ''
+    try { $profiles = [Windows.Networking.Connectivity.NetworkInformation]::GetConnectionProfiles() }
+    catch { $enumErr = $_.Exception.Message }
 
-    $fallback = $null
-    foreach ($p in $profiles) {
+    $all = @()
+    if ($profiles) { $all = @($profiles) }
+    $hot = 0
+    $cands = @()
+    foreach ($p in $all) {
         if (-not $p) { continue }
         $name = ''
         try { $name = [string]$p.ProfileName } catch { }
         # 热点自己的虚拟网卡通常叫"本地连接* N", 排除掉
-        $isHotspotNic = ($name -like '本地连接*') -or ($name -like 'Local Area Connection*')
+        if (($name -like '本地连接*') -or ($name -like 'Local Area Connection*')) { $hot++; continue }
+        $lvl = '?'
+        try { $lvl = [string]$p.GetNetworkConnectivityLevel() } catch { }
+        $wlan = $false
+        try { $wlan = [bool]$p.IsWlanConnectionProfile } catch { }
+        $cands += [pscustomobject]@{ Profile = $p; Name = $name; Level = $lvl; Wlan = $wlan }
+    }
+    $script:MgrDiag = ('连接配置 {0} 个(热点虚拟网卡 {1} 个), 可用候选 {2} 个' -f $all.Count, $hot, $cands.Count)
+    if ($enumErr) { $script:MgrDiag += ('; 枚举连接配置时报错: ' + $enumErr) }
+    if ($cands.Count -gt 0) {
+        $script:MgrDiag += ('; 候选: ' + (($cands | ForEach-Object { $_.Name + '=' + $_.Level }) -join ', '))
+    }
+
+    # 排序: 有互联网的最合适; 其次是"连着但还没验证出互联网"(开机早期有线网卡正好是这一档);
+    # 再退到任何有线; 最后随便一个。老代码只认"第一个 InternetAccess", 挑不到就抓列表里第一个 ——
+    # 那很可能是一条**存着但没连**的 WiFi(level=None), 把它共享出去当然不对。
+    $ordered = @()
+    $ordered += @($cands | Where-Object { $_.Level -eq 'InternetAccess' })
+    $ordered += @($cands | Where-Object { ($_.Level -eq 'LocalAccess' -or $_.Level -eq 'ConstrainedInternetAccess') -and (-not $_.Wlan) })
+    $ordered += @($cands | Where-Object { $_.Level -eq 'LocalAccess' -or $_.Level -eq 'ConstrainedInternetAccess' })
+    $ordered += @($cands | Where-Object { -not $_.Wlan })
+    $ordered += @($cands)
+
+    foreach ($c in $ordered) {
         try {
-            if ($p.IsWlanConnectionProfile -or $p.IsWwanConnectionProfile) { }
-        } catch { }
-        if ($isHotspotNic) { continue }
-        if (-not $fallback) { $fallback = $p }
-        try {
-            if ($p.GetNetworkConnectivityLevel() -eq [Windows.Networking.Connectivity.NetworkConnectivityLevel]::InternetAccess) {
-                return [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::CreateFromConnectionProfile($p)
-            }
-        } catch { }
+            $mgr = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::CreateFromConnectionProfile($c.Profile)
+            $script:MgrPick = ('{0} (level={1})' -f $c.Name, $c.Level)
+            return $mgr
+        } catch { $script:MgrDiag += ('; 用 {0} 建管理器失败: {1}' -f $c.Name, $_.Exception.Message) }
     }
-    if ($fallback) {
-        return [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::CreateFromConnectionProfile($fallback)
-    }
-    $def = [Windows.Networking.Connectivity.NetworkInformation]::GetInternetConnectionProfile()
-    if ($def) {
-        return [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::CreateFromConnectionProfile($def)
-    }
-    throw '当前没有可共享的网络连接, 请先认证上网'
+
+    # 兜底: 系统默认连接。开机早期这条路经常被拒(Access is denied), 所以只当最后一招,
+    # 而且要把它的失败原因也记进诊断里 —— 以前两个 catch 都是空的, 报错只剩这一句, 根本看不出真正卡在哪。
+    try {
+        $def = [Windows.Networking.Connectivity.NetworkInformation]::GetInternetConnectionProfile()
+        if ($def) {
+            $script:MgrPick = ([string]$def.ProfileName + ' (系统默认连接)')
+            return [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager]::CreateFromConnectionProfile($def)
+        }
+    } catch { $script:MgrDiag += ('; 系统默认连接也被拒: ' + $_.Exception.Message) }
+
+    throw ('当前没有可共享的网络连接 —— ' + $script:MgrDiag)
 }
 
 # 读热点配置, 失败自动重试。
 # 刚才在"设置"里改过热点的, 系统切换状态需要一两秒, 这时候读会失败一次 —— 重试就能过去。
 function Get-Retry {
-    param([int]$Times = 5, [int]$SleepMs = 800)
-    $last = $null
-    for ($i = 0; $i -lt $Times; $i++) {
+    param([int]$TimeoutSec = 6, [int]$SleepMs = 600)
+    $deadline = (Get-Date).AddSeconds($TimeoutSec)
+    $last = ''
+    $tries = 0
+    while ($true) {
+        $tries++
         try {
             $mgr = Get-Mgr
             $ap = $mgr.GetCurrentAccessPointConfiguration()
             if ($null -ne $ap -and $null -ne $ap.Ssid) { return @{ mgr = $mgr; ap = $ap } }
             $last = '取到的配置为空'
         } catch { $last = $_.Exception.Message }
-        if ($i -lt $Times - 1) { Start-Sleep -Milliseconds $SleepMs }
+        if ((Get-Date) -ge $deadline) { break }
+        Start-Sleep -Milliseconds $SleepMs
     }
-    throw ('读取热点配置失败: ' + $last)
+    throw ('读取热点配置失败(试了 {0} 次, 共 {1} 秒): {2}' -f $tries, $TimeoutSec, $last)
 }
 
 # WinRT 拿不到已连设备的名字, 用 ARP 表把 IP/MAC 列出来
@@ -168,8 +201,11 @@ switch ($Action) {
 
     'on' {
         try {
-            $r = Get-Retry
+            # 开机那一刻系统的"连接配置"列表经常还没就绪(枚举为空 / 被拒), 所以这里给足 30 秒重试。
+            # 以前固定只试 5 次 × 0.8 秒 = 4 秒, 开机那次必然失败, 用户看到的就是"登录后自动开启移动热点"永远开不起来。
+            $r = Get-Retry -TimeoutSec 30
             $mgr = $r.mgr
+            Write-Host ('共享连接: ' + $script:MgrPick)
             if ([string]$mgr.TetheringOperationalState -eq 'On') {
                 Write-Host '热点已经是开启状态'
             } else {
@@ -244,8 +280,9 @@ switch ($Action) {
 
     'repair' {
         Write-Host '=== 修复移动热点 ==='
-        $r = Get-Retry
+        $r = Get-Retry -TimeoutSec 30
         $mgr = $r.mgr
+        Write-Host ('共享连接: ' + $script:MgrPick)
         if ([string]$mgr.TetheringOperationalState -eq 'On') {
             $null = $mgr.StopTetheringAsync()
             Start-Sleep -Seconds 3
