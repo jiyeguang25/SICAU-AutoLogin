@@ -565,7 +565,7 @@ namespace Sicau
             }, 0, 0);
             titleBox.Controls.Add(new Label
             {
-                Text = "portal.sicau.edu.cn · 开机自动登录",
+                Text = Sicau.Site.PortalHost + " · 开机自动登录",
                 ForeColor = Theme.InkDim,
                 BackColor = Theme.Bg,
                 AutoSize = true,
@@ -626,7 +626,7 @@ namespace Sicau
 
             chkShow = new CheckBox
             {
-                Text = "显示密码",
+                Text = "显示密码（本机加密保存）",
                 AutoSize = true,
                 Font = Fonts.UI,
                 ForeColor = Theme.Ink,
@@ -2039,9 +2039,10 @@ namespace Sicau
             string where = Core.IsInstalled() ? ("已安装到: " + Core.CurrentExeDir()) : ("便携运行: " + Core.CurrentExeDir());
             string text =
                 "校园网自动认证  v" + Core.AppVersion + "\n" +
-                "四川农业大学 portal.sicau.edu.cn\n\n" +
+                "四川农业大学 " + Sicau.Site.PortalHost + "\n\n" +
                 "作者: " + Core.AuthorName + "\n" +
-                "邮箱: " + Core.AuthorMail + "\n\n" +
+                "邮箱: " + Core.AuthorMail + "\n" +
+                "项目主页: https://github.com/" + Core.Update.RepoOwner + "/" + Core.Update.RepoName + "\n\n" +
                 where + "\n" +
                 "配置目录: " + Core.Dir + "\n" +
                 "开机自启: " + (Core.AutostartEnabled() ? "已启用" : "未启用") + "\n\n" +
@@ -2104,17 +2105,82 @@ namespace Sicau
                 };
                 ok.Click += (s, e) => f.Close();
 
+                // 检查更新: 只有用户点这个按钮才会去碰网络(不轮询、不静默下载)
+                var btnUpd = new Win11Button { Text = "检查更新", MinimumSize = new Size(96, 32) };
+                var lblUpd = new Label
+                {
+                    Text = "",
+                    AutoSize = true,
+                    Font = Fonts.UI,
+                    ForeColor = Theme.InkDim,
+                    BackColor = Theme.Card,
+                    MaximumSize = new Size(320, 0)
+                };
+                bool gotNewer = false;
+
                 f.Controls.Add(pic);
                 f.Controls.Add(name);
                 f.Controls.Add(body);
                 f.Controls.Add(ok);
+                f.Controls.Add(btnUpd);
+                f.Controls.Add(lblUpd);
                 f.AcceptButton = ok;
 
                 // 尺寸按内容算: 左边头像列固定 142, 右边文字按量出来的宽度
                 int wantW = 142 + bodySize.Width + 30;
-                int wantH = Math.Max(24 + bodySize.Height, 22 + 96 + 10 + name.PreferredHeight) + 64;
-                f.ClientSize = new Size(Math.Max(wantW, 360), Math.Max(wantH, 240));
+                int wantH = Math.Max(24 + bodySize.Height, 22 + 96 + 10 + name.PreferredHeight) + 64 + 46;
+                f.ClientSize = new Size(Math.Max(wantW, 380), Math.Max(wantH, 260));
                 ok.Location = new Point(f.ClientSize.Width - ok.Width - 20, f.ClientSize.Height - ok.Height - 18);
+                btnUpd.Location = new Point(ok.Left - btnUpd.Width - 8, ok.Top + (ok.Height - btnUpd.Height) / 2);
+                lblUpd.MaximumSize = new Size(Math.Max(200, btnUpd.Left - 22 - 8), 0);
+                lblUpd.Location = new Point(22, Math.Max(body.Bottom + 12, ok.Top - lblUpd.PreferredHeight));
+
+                btnUpd.Click += (s, e) =>
+                {
+                    // 已经查到新版: 这个按钮第二下就是"打开下载页"
+                    if (gotNewer)
+                    {
+                        try { Process.Start(Core.Update.ReleasesUrl); }
+                        catch (Exception ex) { MessageBox.Show(this, "打不开浏览器: " + ex.Message, "检查更新"); }
+                        return;
+                    }
+                    btnUpd.Enabled = false;
+                    lblUpd.ForeColor = Theme.InkDim;
+                    lblUpd.Text = "正在检查 GitHub Releases…";
+                    var th = new System.Threading.Thread(() =>
+                    {
+                        var info = Core.Update.Check();
+                        try
+                        {
+                            if (f.IsDisposed) return;
+                            f.BeginInvoke(new Action(() =>
+                            {
+                                if (f.IsDisposed) return;
+                                if (!info.Ok)
+                                {
+                                    lblUpd.ForeColor = Theme.Err;
+                                    lblUpd.Text = "检查失败: " + info.Error;
+                                }
+                                else if (info.HasNewer)
+                                {
+                                    gotNewer = true;
+                                    lblUpd.ForeColor = Theme.Accent;
+                                    lblUpd.Text = "有新版本 " + info.LatestTag + "（当前 v" + Core.AppVersion + "），点「打开下载页」去下";
+                                    btnUpd.Text = "打开下载页";
+                                }
+                                else
+                                {
+                                    lblUpd.ForeColor = Theme.Ok;
+                                    lblUpd.Text = "已是最新版本 v" + Core.AppVersion;
+                                }
+                                btnUpd.Enabled = true;
+                            }));
+                        }
+                        catch { }
+                    });
+                    th.IsBackground = true;
+                    th.Start();
+                };
 
                 f.ShowDialog(this);
             }
