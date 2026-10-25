@@ -340,8 +340,9 @@ namespace Sicau
             public class Info
             {
                 public bool Ok;           // 检查本身成功(不代表有新版本)
-                public bool HasNewer;     // 远端 tag 比 AppVersion 新
-                public string LatestTag = "";
+                public bool HasNewer;     // 远端程序版本比 AppVersion 新
+                public string LatestTag = "";        // 发布包 tag(如 v2.0), 给人看
+                public string RemoteVersion = "";    // 实际用来比的程序版本(如 1.9)
                 public string Url = ReleasesUrl;
                 public string Error = "";
             }
@@ -384,7 +385,13 @@ namespace Sicau
                 info.LatestTag = tag.Groups[1].Value.Trim();
                 var url = Regex.Match(r.Body, "\"html_url\"\\s*:\\s*\"([^\"]+)\"");
                 if (url.Success) info.Url = url.Groups[1].Value;
-                info.HasNewer = CompareVersion(info.LatestTag, AppVersion) > 0;
+                // 本项目的 tag 是**发布包版本**, 按老规矩 = 程序版本 + 0.1(见 README「版本号怎么看」)。
+                // 所以拿 tag 直接跟 AppVersion 比会永远显示"有新版本": v2.0 的包里装的是程序 1.9。
+                // 正确做法是从附件名里取程序版本(SICAU-win-1.9.exe / SICAU-android-1.9.apk),
+                // 取不到(比如老版本没传附件)才退回 tag —— 那种情况下宁可比错也不要漏提示。
+                var asset = Regex.Match(r.Body ?? "", "SICAU-(?:win|android)-(\\d+(?:\\.\\d+)*)\\.(?:exe|apk)");
+                info.RemoteVersion = asset.Success ? asset.Groups[1].Value : info.LatestTag;
+                info.HasNewer = CompareVersion(info.RemoteVersion, AppVersion) > 0;
                 info.Ok = true;
                 return info;
             }

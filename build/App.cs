@@ -2165,7 +2165,11 @@ namespace Sicau
                                 {
                                     gotNewer = true;
                                     lblUpd.ForeColor = Theme.Accent;
-                                    lblUpd.Text = "有新版本 " + info.LatestTag + "（当前 v" + Core.AppVersion + "），点「打开下载页」去下";
+                                    // 显示程序版本(用户能对照文件名), 发布包 tag 只在两者不同时才附一句
+                                    string tail = info.LatestTag != "" && info.LatestTag != ("v" + info.RemoteVersion)
+                                        ? "（发布包 " + info.LatestTag + "）" : "";
+                                    lblUpd.Text = "有新版本 v" + info.RemoteVersion + tail
+                                        + "，当前 v" + Core.AppVersion + "，点「打开下载页」去下";
                                     btnUpd.Text = "打开下载页";
                                 }
                                 else
