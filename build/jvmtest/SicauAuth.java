@@ -154,7 +154,7 @@ public class SicauAuth {
     public String buildFallbackUrl() {
         String ip = localIpv4(portalHost, Site.HTTPS_PORT);
         if (ip == null) return null;
-        StringBuilder sb = new StringBuilder("https://" + portalHost + "/portal.do?wlanuserip=" + ip);
+        StringBuilder sb = new StringBuilder("https://" + portalHost + Site.PORTAL_PATH + "?wlanuserip=" + ip);
         if (wlanAcName != null && wlanAcName.length() > 0) sb.append("&wlanacname=").append(wlanAcName);
         if (nasIp != null && nasIp.length() > 0) sb.append("&nasip=").append(nasIp);
         return sb.toString();
@@ -247,7 +247,7 @@ public class SicauAuth {
         if (msid.find()) { sid = msid.group(); L("会话号: " + sid); }
         else L("页面里没找到会话号, 按无会话提交");
 
-        String target = "https://" + portalHost + "/webauth.do" + sid;
+        String target = "https://" + portalHost + Site.WEBAUTH_PATH + sid;
         if (urlParam.length() > 0) target = target + "?" + urlParam;
         final String postBody = sb.toString();
 

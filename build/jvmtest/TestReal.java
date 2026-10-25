@@ -9,7 +9,14 @@ public class TestReal {
         p.load(new java.io.InputStreamReader(fis, "UTF-8"));
         fis.close();
         String user = p.getProperty("userid", "").trim();
-        String pass = p.getProperty("password", "");
+        // 密码现在是加密存的(config.conf 里只有 password_enc=dpapi:...), Java 这边解不开 DPAPI,
+        // 所以桌面测试直接从第二个参数拿明文密码: TestReal <config.conf> [明文密码]
+        String pass = args.length > 1 ? args[1] : p.getProperty("password", "");
+        if (pass.length() == 0 && p.getProperty("password_enc", "").length() > 0) {
+            out.println("config.conf 里只有加密后的 password_enc, 桌面测试请把明文密码作为第二个参数传进来:");
+            out.println("  TestReal <config.conf> <明文密码>");
+            return;
+        }
         out.println("账号 = " + user + "   密码长度 = " + pass.length());
 
         out.println("=== 安卓认证代码, 在桌面 JVM 上真实跑一遍 ===");
