@@ -36,7 +36,24 @@ $APP  = Join-Path $RUNA ('SICAU-win-' + $VER + '.exe')         # 启动文件夹
 Write-Host ('=== 1) 编译  SICAU-win-' + $VER + '.exe ===')
 Remove-Item $TMP -Force -ErrorAction SilentlyContinue
 
-& $CSC /nologo /target:winexe /platform:anycpu /optimize+ /codepage:65001 ('/out:' + $TMP) ('/win32icon:' + $D + '\app.ico') ('/win32manifest:' + $D + '\app.manifest') ('/resource:' + $D + '\HotspotScript.ps1,HotspotScript') ('/resource:' + $D + '\avatar.png,avatar') /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Security.dll ($D + '\Site.cs') ($D + '\Ui.cs') ($D + '\Core.cs') ($D + '\App.cs') 2>&1 | Select-String -NotMatch 'warning CS' | Select-Object -First 15 | Out-String
+# exe 文件属性里的「文件版本 / 产品版本」也来自 $VER（2026-10-25 加）。
+# 不加这段, 资源管理器里一律显示 0.0.0.0 —— 2.0 和 2.1 属性一模一样,
+# 用户无法分辨手里跑的是哪一版, 和"版本统一"这件事自相矛盾。
+$ASMINFO = Join-Path $env:TEMP 'SICAU-assemblyinfo.gen.cs'
+$V4 = if ($VER -match '^\d+\.\d+\.\d+\.\d+$') { $VER } else { $VER + '.0.0' }
+$ASMSRC = @"
+using System.Reflection;
+[assembly: AssemblyVersion("$V4")]
+[assembly: AssemblyFileVersion("$V4")]
+[assembly: AssemblyInformationalVersion("SICAU-AutoLogin $VER")]
+[assembly: AssemblyProduct("SICAU-AutoLogin")]
+[assembly: AssemblyTitle("校园网自动认证")]
+[assembly: AssemblyCompany("极夜光")]
+[assembly: AssemblyCopyright("Copyright (c) 极夜光")]
+"@
+[System.IO.File]::WriteAllText($ASMINFO, $ASMSRC, (New-Object System.Text.UTF8Encoding($false)))
+
+& $CSC /nologo /target:winexe /platform:anycpu /optimize+ /codepage:65001 ('/out:' + $TMP) ('/win32icon:' + $D + '\app.ico') ('/win32manifest:' + $D + '\app.manifest') ('/resource:' + $D + '\HotspotScript.ps1,HotspotScript') ('/resource:' + $D + '\avatar.png,avatar') /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Security.dll ($D + '\Site.cs') ($D + '\Ui.cs') ($D + '\Core.cs') ($D + '\App.cs') ($ASMINFO) 2>&1 | Select-String -NotMatch 'warning CS' | Select-Object -First 15 | Out-String
 
 if (-not (Test-Path $TMP)) { Write-Host 'FAILED 编译失败'; exit 1 }
 
