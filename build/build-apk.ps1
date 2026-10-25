@@ -74,6 +74,13 @@ Write-Host ('产物: ' + $FINAL)
 Remove-Item $OUT -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path ($OUT + '\classes'), ($OUT + '\gen'), ($OUT + '\dex') | Out-Null
 
+# aapt2 在这个环境下建文件会报「数据无效 (13)」/「failed to open file」，而 javac、PowerShell、
+# cmd 往同一个目录写都正常 —— 差别在完整性级别：工作区派生出来的 aapt2 跑在 Low，
+# 而 build\ 这一层是 Medium，Low 进程不能往 Medium 目录里 CreateFile（No-Write-Up）。
+# 把中间产物目录整个标成 Low 就好了：这个目录本来就是一次性的，也在 .gitignore 里。
+# （详见开发笔记 §19「本机没有 Android SDK / aapt2 建不了文件」那一节。）
+icacls $OUT /setintegritylevel '(OI)(CI)L' /T 2>&1 | Out-Null
+
 Write-Host '=== 1) aapt2 compile ==='
 & ($BT + '\aapt2.exe') compile --dir ($S + '\res') -o ($OUT + '\res.zip') 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0) { Write-Host 'FAILED compile'; exit 1 }
