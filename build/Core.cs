@@ -937,8 +937,6 @@ namespace Sicau
             }
         }
 
-        static bool IsIp(string s) { IPAddress a; return IPAddress.TryParse(s, out a); }
-
         // ------------------------------------------------ 联网判定
         public static bool TestOnline(int timeoutSec = 6)
         {
@@ -1877,11 +1875,6 @@ namespace Sicau
                 Process.Start(psi);
             }
             catch { }
-        }
-
-        static string EscapeXml(string s)
-        {
-            return s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
         }
 
         public static string RunCmd(string file, string args)

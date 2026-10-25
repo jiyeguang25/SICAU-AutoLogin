@@ -31,14 +31,5 @@ namespace Sicau
         // ---- 校园 WiFi ----
         /// <summary>学校在用的 WiFi 名(按优先级: 6 代在那栋楼就先连它)。</summary>
         public static readonly string[] CampusSsids = { "i_sicau_wifi6", "i_sicau" };
-        /// <summary>校园 WiFi 名的公共前缀。WiFi 名会随楼栋变(i_sicau_wifi5/wifi6…), 认前缀最稳。</summary>
-        public const string CampusSsidPrefix = "i_sicau";
-
-        /// <summary>某个 WiFi 名是不是校园网的(按前缀判断, 大小写不敏感)。</summary>
-        public static bool IsCampusSsid(string ssid)
-        {
-            if (string.IsNullOrEmpty(ssid)) return false;
-            return ssid.Trim().StartsWith(CampusSsidPrefix, StringComparison.OrdinalIgnoreCase);
-        }
     }
 }

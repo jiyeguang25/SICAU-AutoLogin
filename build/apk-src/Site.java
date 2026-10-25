@@ -31,14 +31,6 @@ public final class Site {
     // ---- 校园 WiFi ----
     /** 学校在用的 WiFi 名(按优先级: 6 代在那栋楼就先连它)。 */
     public static final String[] CAMPUS_SSIDS = { "i_sicau_wifi6", "i_sicau" };
-    /** 校园 WiFi 名的公共前缀。WiFi 名会随楼栋变(i_sicau_wifi5/wifi6…), 认前缀最稳。 */
-    public static final String CAMPUS_SSID_PREFIX = "i_sicau";
 
     private Site() { }
-
-    /** 某个 WiFi 名是不是校园网的(按前缀判断, 大小写不敏感)。 */
-    public static boolean isCampusSsid(String ssid) {
-        if (ssid == null) return false;
-        return ssid.trim().toLowerCase().startsWith(CAMPUS_SSID_PREFIX);
-    }
 }
