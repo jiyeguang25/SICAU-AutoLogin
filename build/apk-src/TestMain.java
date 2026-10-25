@@ -3,12 +3,12 @@ package cn.edu.sicau.autologin;
 public class TestMain {
     public static void main(String[] args) throws Exception {
         java.io.PrintStream out = new java.io.PrintStream(System.out, true, "UTF-8");
-        out.println("localIpv4 = " + SicauAuth.localIpv4("portal.sicau.edu.cn", 443));
+        out.println("localIpv4 = " + SicauAuth.localIpv4(Site.PORTAL_HOST, Site.HTTPS_PORT));
 
         SicauAuth a = new SicauAuth(new SicauAuth.Logger() {
             public void log(String line) { System.out.println("   " + line); }
         });
-        a.portalHost = "portal.sicau.edu.cn";
+        a.portalHost = Site.PORTAL_HOST;
         a.wlanAcName = "WJ-C10-Bras01-ME60-X8A";
         a.nasIp = "5.5.5.18";
         a.userId = "DUMMY_USER";

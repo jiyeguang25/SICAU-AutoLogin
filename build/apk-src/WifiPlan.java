@@ -149,11 +149,11 @@ public final class WifiPlan {
     // ================================================================
 
     /**
-     * 学校就这两个 WiFi 名（在用户电脑上 `netsh wlan show profiles` 查到的，写死在这里当预设）。
+     * 学校在用的 WiFi 名（在用户电脑上 `netsh wlan show profiles` 查到的，常量放在 Site.java）。
      * 界面上会直接把这两个做成按钮，点一下就填上并连 —— 不用打字，也不用等扫描。
      * 扫描列表里如果扫到别的, 照样能选; 手动输入也一直留着。
      */
-    public static final String[] CAMPUS_PRESETS = { "i_sicau_wifi6", "i_sicau" };
+    public static final String[] CAMPUS_PRESETS = Site.CAMPUS_SSIDS;
 
     public static List<String> campusPresets() {
         List<String> l = new ArrayList<String>();

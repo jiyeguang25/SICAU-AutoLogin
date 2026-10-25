@@ -27,7 +27,7 @@ public class SicauAuth {
         void log(String line);
     }
 
-    public String portalHost = "portal.sicau.edu.cn";
+    public String portalHost = Site.PORTAL_HOST;
     public String wlanAcName = "";
     public String nasIp = "";
     public String userId = "";
@@ -152,7 +152,7 @@ public class SicauAuth {
     }
 
     public String buildFallbackUrl() {
-        String ip = localIpv4(portalHost, 443);
+        String ip = localIpv4(portalHost, Site.HTTPS_PORT);
         if (ip == null) return null;
         StringBuilder sb = new StringBuilder("https://" + portalHost + "/portal.do?wlanuserip=" + ip);
         if (wlanAcName != null && wlanAcName.length() > 0) sb.append("&wlanacname=").append(wlanAcName);

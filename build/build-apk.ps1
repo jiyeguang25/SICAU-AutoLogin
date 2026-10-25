@@ -85,7 +85,7 @@ Write-Host ('base.apk = ' + (Get-Item ($OUT + '\base.apk')).Length)
 
 Write-Host '=== 3) javac ==='
 $all = New-Object System.Collections.Generic.List[string]
-foreach ($f in @('Http.java','SicauAuth.java','AppLog.java','Prefs.java','Scheduler.java','AuthJobService.java','BootReceiver.java','KeepAliveService.java','MainActivity.java','WifiPlan.java','WifiSwitch.java','WifiScan.java','AppCtx.java')) {
+foreach ($f in @('Http.java','SicauAuth.java','AppLog.java','Prefs.java','PwdBox.java','Secret.java','Scheduler.java','AuthJobService.java','BootReceiver.java','KeepAliveService.java','MainActivity.java','WifiPlan.java','WifiSwitch.java','WifiScan.java','AppCtx.java','Site.java')) {
   $all.Add($S + '\' + $f)
 }
 foreach ($g in @(Get-ChildItem ($OUT + '\gen') -Recurse -Filter *.java)) { $all.Add($g.FullName) }

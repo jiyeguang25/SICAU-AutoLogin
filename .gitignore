@@ -28,3 +28,6 @@ build/sicau.keystore
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# ---- 临时验证脚本/探测产物（不进版本库）----
+_probe/

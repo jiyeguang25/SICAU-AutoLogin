@@ -15,7 +15,7 @@ import javax.net.ssl.SNIServerName;
 public class TlsDebug {
     public static void main(String[] args) throws Exception {
         java.io.PrintStream out = new java.io.PrintStream(System.out, true, "UTF-8");
-        String host = "portal.sicau.edu.cn";
+        String host = Site.PORTAL_HOST;
 
         out.println("=== A: 默认 createSocket(sock, host, port, true) ===");
         show(out, host, false);
@@ -26,10 +26,10 @@ public class TlsDebug {
 
     static void show(java.io.PrintStream out, String host, boolean explicitSni) throws Exception {
         Socket sock = new Socket();
-        sock.connect(new InetSocketAddress(InetAddress.getByName("10.255.248.9"), 443), 8000);
+        sock.connect(new InetSocketAddress(InetAddress.getByName("10.255.248.9"), Site.HTTPS_PORT), 8000);
         sock.setSoTimeout(8000);
         SSLSocketFactory f = (SSLSocketFactory) SSLSocketFactory.getDefault();
-        SSLSocket s = (SSLSocket) f.createSocket(sock, host, 443, true);
+        SSLSocket s = (SSLSocket) f.createSocket(sock, host, Site.HTTPS_PORT, true);
         if (explicitSni) {
             SSLParameters p = s.getSSLParameters();
             List<SNIServerName> names = new java.util.ArrayList<SNIServerName>();

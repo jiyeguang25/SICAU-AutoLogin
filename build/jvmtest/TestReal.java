@@ -13,12 +13,12 @@ public class TestReal {
         out.println("账号 = " + user + "   密码长度 = " + pass.length());
 
         out.println("=== 安卓认证代码, 在桌面 JVM 上真实跑一遍 ===");
-        out.println("localIpv4 = " + SicauAuth.localIpv4("portal.sicau.edu.cn", 443));
+        out.println("localIpv4 = " + SicauAuth.localIpv4(Site.PORTAL_HOST, Site.HTTPS_PORT));
 
         SicauAuth a = new SicauAuth(new SicauAuth.Logger() {
             public void log(String line) { System.out.println("   " + line); }
         });
-        a.portalHost = "portal.sicau.edu.cn";
+        a.portalHost = Site.PORTAL_HOST;
         a.wlanAcName = "WJ-C10-Bras01-ME60-X8A";
         a.nasIp = "5.5.5.18";
         a.userId = user;

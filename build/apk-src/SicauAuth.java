@@ -27,7 +27,7 @@ public class SicauAuth {
         void log(String line);
     }
 
-    public String portalHost = "portal.sicau.edu.cn";
+    public String portalHost = Site.PORTAL_HOST;
     public String wlanAcName = "";
     public String nasIp = "";
     public String userId = "";
@@ -76,8 +76,10 @@ public class SicauAuth {
     private static final Pattern P_TYPE_D = Pattern.compile("type\\s*=\\s*\"([^\"]*)\"", Pattern.CASE_INSENSITIVE);
     private static final Pattern P_VAL_D = Pattern.compile("value\\s*=\\s*\"([^\"]*)\"", Pattern.CASE_INSENSITIVE);
     private static final Pattern P_VAL_S = Pattern.compile("value\\s*=\\s*'([^']*)'", Pattern.CASE_INSENSITIVE);
+    /** 门户路径的正则写法: 由 Site.PORTAL_PATH 生成, 别在这里再写死一份。 */
+    private static final String PORTAL_PATH_RE = Site.PORTAL_PATH.replace(".", "\\.");
     private static final Pattern P_PORTAL_ABS =
-        Pattern.compile("https?://[A-Za-z0-9\\.\\-]+(:[0-9]+)?/portal\\.do\\?[^\\s\"<>\\\\]*", Pattern.CASE_INSENSITIVE);
+        Pattern.compile("https?://[A-Za-z0-9\\.\\-]+(:[0-9]+)?" + PORTAL_PATH_RE + "\\?[^\\s\"<>\\\\]*", Pattern.CASE_INSENSITIVE);
 
     public static Map<String, String> parseFormFields(String html) {
         Map<String, String> map = new LinkedHashMap<String, String>();
@@ -143,7 +145,7 @@ public class SicauAuth {
             Http.Resp r = h.request("GET", u, null, timeoutSec, false);
             if (r.status >= 300 && r.status < 400 && r.location.length() > 0) {
                 String loc = r.location.replace("&amp;", "&");
-                if (loc.indexOf("portal.do?") >= 0) return loc;
+                if (loc.indexOf(Site.PORTAL_PATH + "?") >= 0) return loc;
                 if (loc.startsWith("/")) return "http://" + portalHost + loc;
             }
             String body = r.body;
@@ -151,7 +153,7 @@ public class SicauAuth {
                 String t = body.replace("&amp;", "&").replace("\\/", "/");
                 Matcher m = P_PORTAL_ABS.matcher(t);
                 if (m.find()) return m.group();
-                Matcher m2 = Pattern.compile("/portal\\.do\\?[^\\s\"<>\\\\]*").matcher(t);
+                Matcher m2 = Pattern.compile(PORTAL_PATH_RE + "\\?[^\\s\"<>\\\\]*").matcher(t);
                 if (m2.find()) return "https://" + portalHost + m2.group();
             }
         }
@@ -159,9 +161,9 @@ public class SicauAuth {
     }
 
     public String buildFallbackUrl() {
-        String ip = localIpv4(portalHost, 443);
+        String ip = localIpv4(portalHost, Site.HTTPS_PORT);
         if (ip == null) return null;
-        StringBuilder sb = new StringBuilder("https://" + portalHost + "/portal.do?wlanuserip=" + ip);
+        StringBuilder sb = new StringBuilder("https://" + portalHost + Site.PORTAL_PATH + "?wlanuserip=" + ip);
         if (wlanAcName != null && wlanAcName.length() > 0) sb.append("&wlanacname=").append(wlanAcName);
         if (nasIp != null && nasIp.length() > 0) sb.append("&nasip=").append(nasIp);
         return sb.toString();
@@ -254,7 +256,7 @@ public class SicauAuth {
         if (msid.find()) { sid = msid.group(); L("会话号: " + sid); }
         else L("页面里没找到会话号, 按无会话提交");
 
-        String target = "https://" + portalHost + "/webauth.do" + sid;
+        String target = "https://" + portalHost + Site.WEBAUTH_PATH + sid;
         if (urlParam.length() > 0) target = target + "?" + urlParam;
         final String postBody = sb.toString();
 

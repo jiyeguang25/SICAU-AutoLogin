@@ -33,7 +33,7 @@ $APP  = Join-Path $RUNA ('SICAU-win-' + $VER + '.exe')         # 启动文件夹
 Write-Host ('=== 1) 编译  SICAU-win-' + $VER + '.exe ===')
 Remove-Item $TMP -Force -ErrorAction SilentlyContinue
 
-& $CSC /nologo /target:winexe /platform:anycpu /optimize+ /codepage:65001 ('/out:' + $TMP) ('/win32icon:' + $D + '\app.ico') ('/win32manifest:' + $D + '\app.manifest') ('/resource:' + $D + '\HotspotScript.ps1,HotspotScript') ('/resource:' + $D + '\avatar.png,avatar') /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll ($D + '\Ui.cs') ($D + '\Core.cs') ($D + '\App.cs') 2>&1 | Select-String -NotMatch 'warning CS' | Select-Object -First 15 | Out-String
+& $CSC /nologo /target:winexe /platform:anycpu /optimize+ /codepage:65001 ('/out:' + $TMP) ('/win32icon:' + $D + '\app.ico') ('/win32manifest:' + $D + '\app.manifest') ('/resource:' + $D + '\HotspotScript.ps1,HotspotScript') ('/resource:' + $D + '\avatar.png,avatar') /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Security.dll ($D + '\Site.cs') ($D + '\Ui.cs') ($D + '\Core.cs') ($D + '\App.cs') 2>&1 | Select-String -NotMatch 'warning CS' | Select-Object -First 15 | Out-String
 
 if (-not (Test-Path $TMP)) { Write-Host 'FAILED 编译失败'; exit 1 }
 
