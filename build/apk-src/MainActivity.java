@@ -31,7 +31,7 @@ public class MainActivity extends Activity {
     private static final int ST_NEUTRAL = 0, ST_OK = 1, ST_ERR = 2;
 
     private EditText etUser, etPass, etInterval, etWifiSsid;
-    private CheckBox cbEnabled, cbKeepAlive, cbWifiAuto, cbQuietPortal;
+    private CheckBox cbEnabled, cbKeepAlive, cbWifiAuto, cbQuietPortal, cbShowPass;
     private TextView tvStatus, tvLog, title, sub, tvWifi;
     private Button btnSave, btnAuth, btnWifiConnect;
     private LinearLayout cardAccount, cardRun, cardLog;
@@ -356,7 +356,7 @@ public class MainActivity extends Activity {
         root.addView(titleRow);
 
         sub = new TextView(this);
-        sub.setText("portal.sicau.edu.cn  ·  开机自动登录，不用再手动认证");
+        sub.setText(Site.PORTAL_HOST + "  ·  开机自动登录，不用再手动认证");
         sub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         sub.setTextColor(INK_DIM);
         // 左边空出头像那一条(38dp + 10dp 间距), 让两行文字对齐
@@ -440,6 +440,13 @@ public class MainActivity extends Activity {
         cardAccount.addView(label("密码", 13, INK_DIM));
         etPass = field(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         cardAccount.addView(etPass);
+
+        // 密码在本地是加密存的（Secret.java / Keystore），但机主自己得看得见自己存的什么
+        cbShowPass = check("显示密码（本机加密保存，只有这台手机能解开）");
+        cardAccount.addView(cbShowPass);
+        cbShowPass.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) { applyPassVisible(); }
+        });
 
         cbWifiAuto = check("打开界面 / 点认证时自动连到上面的 WiFi");
         cardAccount.addView(cbWifiAuto);
@@ -547,6 +554,22 @@ public class MainActivity extends Activity {
     // ================================================================
     //  数据读写
     // ================================================================
+    /**
+     * 「显示密码」开关：只切输入框的遮挡，密码本身一直是解密后的值，界面上不多存一份。
+     *
+     * <p>用 setTransformationMethod 而不是改 inputType —— 改 inputType 会把光标位置、
+     * 字体一起重置，用户输到一半勾一下就跳回开头。</p>
+     */
+    private void applyPassVisible() {
+        if (etPass == null) return;
+        if (cbShowPass != null && cbShowPass.isChecked()) {
+            etPass.setTransformationMethod(android.text.method.HideReturnsTransformationMethod.getInstance());
+        } else {
+            etPass.setTransformationMethod(android.text.method.PasswordTransformationMethod.getInstance());
+        }
+        if (etPass.getText() != null) etPass.setSelection(etPass.getText().length());
+    }
+
     private void loadToUi() {
         Prefs p = Prefs.load(this);
         if (etUser.getText().length() == 0) etUser.setText(p.userId);

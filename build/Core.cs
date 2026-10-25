@@ -9,6 +9,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 
 namespace Sicau
 {
@@ -16,7 +17,7 @@ namespace Sicau
     {
         public string UserId = "";
         public string Password = "";
-        public string PortalHost = "portal.sicau.edu.cn";
+        public string PortalHost = Site.PortalHost;   // 域名的唯一来源: Site.cs
         // 这两个值随接入交换机变化, 不能写死。认证时优先用网关跳转里的真实值,
         // 并自动缓存到 portal-cache.conf; 这里留空表示"没有兜底值, 完全靠网关跳转"。
         public string WlanAcName = "";
@@ -270,10 +271,162 @@ namespace Sicau
         }
 
         // ------------------------------------------------ 配置
+
+        /// <summary>
+        /// 密码在磁盘上的存法: DPAPI(CurrentUser) 加密后 Base64, 前缀 <c>dpapi:</c>。
+        ///
+        /// 为什么用 DPAPI: Windows 自带、密钥由系统按当前用户托管, 自己不造密钥也不写死密钥;
+        /// 别的用户/别的机器拷走配置文件也解不开。旧配置里的明文 <c>password=</c> 照样认,
+        /// 读到以后 LoadCfg 会自动重新保存成加密形式(见下面的 needResave), 老用户不用重填。
+        ///
+        /// 注意: 解码失败**不外抛**, 统一返回空串 —— 上层当"没有密码, 请重新输入"处理,
+        /// 千万别在这里把密文当明文用。
+        /// </summary>
+        public static class Pwd
+        {
+            const string Prefix = "dpapi:";
+
+            /// <summary>固定附加熵: 让同一台机器上别的程序即使拿到密文也不容易直接解开。</summary>
+            static byte[] Entropy { get { return Encoding.UTF8.GetBytes("SICAU-AutoLogin/pwd/v1"); } }
+
+            /// <summary>加密; 空串直接返回空串(没密码就别写一行空密文)。失败也返回空串, 绝不退回明文。</summary>
+            public static string Protect(string plain)
+            {
+                if (string.IsNullOrEmpty(plain)) return "";
+                try
+                {
+                    byte[] raw = ProtectedData.Protect(Encoding.UTF8.GetBytes(plain), Entropy, DataProtectionScope.CurrentUser);
+                    return Prefix + Convert.ToBase64String(raw);
+                }
+                catch { return ""; }
+            }
+
+            /// <summary>解密; 老配置(没有前缀)按明文原样返回, 便于平滑迁移。</summary>
+            public static string Unprotect(string stored)
+            {
+                if (string.IsNullOrEmpty(stored)) return "";
+                if (!stored.StartsWith(Prefix, StringComparison.Ordinal)) return stored;
+                try
+                {
+                    byte[] raw = Convert.FromBase64String(stored.Substring(Prefix.Length));
+                    return Encoding.UTF8.GetString(ProtectedData.Unprotect(raw, Entropy, DataProtectionScope.CurrentUser));
+                }
+                catch { return ""; }
+            }
+
+            /// <summary>这个值是不是"还没加密"的明文(空串不算)。</summary>
+            public static bool IsLegacyPlain(string stored)
+            {
+                return !string.IsNullOrEmpty(stored) && !stored.StartsWith(Prefix, StringComparison.Ordinal);
+            }
+        }
+
+        // ------------------------------------------------ 检查更新(只在用户点击时跑)
+        /// <summary>
+        /// 查 GitHub Releases 的最新版本。
+        ///
+        /// 只在用户点「检查更新」时调用: 不做后台轮询、不做静默下载 ——
+        /// 校园网里 api.github.com 常常是不通的, 后台轮询只会刷一屏失败日志。
+        /// 所有失败都翻译成中文可读串放进 Error, 绝不外抛异常。
+        /// </summary>
+        public static class Update
+        {
+            public const string RepoOwner = "jiyeguang25";
+            public const string RepoName = "SICAU-AutoLogin";
+            /// <summary>给用户点的下载页(浏览器能直接打开, 不用 API)。</summary>
+            public const string ReleasesUrl = "https://github.com/" + RepoOwner + "/" + RepoName + "/releases/latest";
+            static string ApiUrl { get { return "https://api.github.com/repos/" + RepoOwner + "/" + RepoName + "/releases/latest"; } }
+
+            public class Info
+            {
+                public bool Ok;           // 检查本身成功(不代表有新版本)
+                public bool HasNewer;     // 远端 tag 比 AppVersion 新
+                public string LatestTag = "";
+                public string Url = ReleasesUrl;
+                public string Error = "";
+            }
+
+            public static Info Check(int timeoutSec = 8)
+            {
+                var info = new Info();
+                HttpResult r;
+                try
+                {
+                    // 和认证前一样的处理: 老 .NET 默认只谈 TLS 1.0, GitHub 早就不收了
+                    ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
+                }
+                catch { }
+                try
+                {
+                    // 不强行走 IPv4: GitHub 走 CDN, 让系统自己挑路; 校园网里通常反而要不了 IPv4
+                    r = Fetch(ApiUrl, "GET", null, null, true, timeoutSec, false);
+                }
+                catch (Exception ex)
+                {
+                    info.Error = "连不上 GitHub: " + ex.Message;
+                    return info;
+                }
+                if (r == null || r.Status != 200)
+                {
+                    int st = r == null ? 0 : r.Status;
+                    if (st == 404) info.Error = "仓库或发布页不存在(HTTP 404), 可能还没发布过版本";
+                    else if (st == 403) info.Error = "GitHub 限制了访问频率(HTTP 403), 过几分钟再试";
+                    else if (st == 0) info.Error = "没有收到回应(可能不在能上外网的环境)";
+                    else info.Error = "GitHub 返回 HTTP " + st;
+                    return info;
+                }
+                var tag = Regex.Match(r.Body ?? "", "\"tag_name\"\\s*:\\s*\"([^\"]+)\"");
+                if (!tag.Success)
+                {
+                    info.Error = "GitHub 返回的内容里没找到版本号(格式变了?)";
+                    return info;
+                }
+                info.LatestTag = tag.Groups[1].Value.Trim();
+                var url = Regex.Match(r.Body, "\"html_url\"\\s*:\\s*\"([^\"]+)\"");
+                if (url.Success) info.Url = url.Groups[1].Value;
+                info.HasNewer = CompareVersion(info.LatestTag, AppVersion) > 0;
+                info.Ok = true;
+                return info;
+            }
+
+            static int[] NumParts(string v)
+            {
+                // -beta / -rc 这种预发布后缀不算"更新"(v2.0-beta1 不等于已经发了 2.0), 直接截掉再比数字段
+                if (v != null)
+                {
+                    int dash = v.IndexOf('-');
+                    if (dash > 0) v = v.Substring(0, dash);
+                }
+                var list = new List<int>();
+                foreach (Match m in Regex.Matches(v ?? "", "\\d+"))
+                {
+                    int n;
+                    if (int.TryParse(m.Value, out n)) list.Add(n);
+                }
+                return list.ToArray();
+            }
+
+            /// <summary>比版本号: a 比 b 新返回 1, 旧返回 -1, 相同返回 0。v 前缀、-beta 之类后缀都忽略。</summary>
+            public static int CompareVersion(string a, string b)
+            {
+                int[] x = NumParts(a), y = NumParts(b);
+                int n = Math.Max(x.Length, y.Length);
+                for (int i = 0; i < n; i++)
+                {
+                    int p = i < x.Length ? x[i] : 0;
+                    int q = i < y.Length ? y[i] : 0;
+                    if (p != q) return p > q ? 1 : -1;
+                }
+                return 0;
+            }
+        }
+
         public static Cfg LoadCfg()
         {
             var c = new Cfg();
             if (!File.Exists(ConfPath)) return c;
+            string pwdPlain = null;    // 老配置里的明文(只为平滑迁移, 读完立刻覆盖成加密)
+            string pwdEnc = null;      // 新配置里的密文
             try
             {
                 foreach (var raw in File.ReadAllLines(ConfPath, Encoding.UTF8))
@@ -287,7 +440,8 @@ namespace Sicau
                     switch (k)
                     {
                         case "userid": c.UserId = v.Trim(); break;
-                        case "password": c.Password = v; break;
+                        case "password": pwdPlain = v; break;
+                        case "password_enc": pwdEnc = v.Trim(); break;
                         case "portalhost": if (v.Length > 0) c.PortalHost = v.Trim(); break;
                         case "wlanacname": c.WlanAcName = v.Trim(); break;
                         case "nasip": c.NasIp = v.Trim(); break;
@@ -305,6 +459,29 @@ namespace Sicau
                 }
             }
             catch { }
+
+            // 密码: 有密文就解密, 只有明文(老配置)就当明文用并立刻升级成加密形式重存。
+            // 解不开(换了 Windows 账户/机器)则留空, 界面上会显示成没填, 用户重输一次即可。
+            bool needResave = false;
+            if (!string.IsNullOrEmpty(pwdEnc))
+            {
+                c.Password = Pwd.Unprotect(pwdEnc);
+                if (c.Password.Length == 0 && Pwd.IsLegacyPlain(pwdPlain))
+                {
+                    c.Password = pwdPlain;   // 密文坏了但明文还在: 先把老密码救回来
+                    needResave = true;
+                }
+            }
+            else if (Pwd.IsLegacyPlain(pwdPlain))
+            {
+                c.Password = pwdPlain;
+                needResave = true;
+            }
+            if (needResave)
+            {
+                try { SaveCfg(c); } catch { }   // 迁移失败不影响本次使用(密码已经在内存里)
+            }
+
             LogKeepHours = c.LogKeepHours;   // Log() 是静态的, 自动清理由它按这个值判断
             return c;
         }
@@ -312,9 +489,11 @@ namespace Sicau
         public static void SaveCfg(Cfg c)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("# SICAU-AutoLogin 配置 (明文保存, 请勿外传)");
+            sb.AppendLine("# SICAU-AutoLogin 配置");
+            sb.AppendLine("# password 已用 Windows DPAPI(CurrentUser 作用域)加密, 只有本机本账户能解开;");
+            sb.AppendLine("# 把这份配置拷到别的电脑或别的 Windows 账户会解不开, 重新输入一次密码即可(会自动重新加密)。");
             sb.AppendLine("userid=" + c.UserId);
-            sb.AppendLine("password=" + c.Password);
+            sb.AppendLine("password_enc=" + Pwd.Protect(c.Password));
             sb.AppendLine("portalhost=" + c.PortalHost);
             sb.AppendLine("wlanacname=" + c.WlanAcName);
             sb.AppendLine("nasip=" + c.NasIp);
@@ -775,7 +954,7 @@ namespace Sicau
             return null;
         }
 
-        static string portalHostCached = "portal.sicau.edu.cn";
+        static string portalHostCached = Site.PortalHost;
         public static string PortalHostOf() { return portalHostCached; }
         public static void SetPortalHost(string h) { portalHostCached = h; }
 
@@ -794,7 +973,7 @@ namespace Sicau
                     if (r.Status >= 300 && r.Status < 400 && !string.IsNullOrEmpty(r.Location))
                     {
                         string loc = r.Location.Replace("&amp;", "&");
-                        if (loc.Contains("portal.do?")) return loc;
+                        if (loc.Contains(Site.PortalPath + "?")) return loc;
                         if (loc.StartsWith("/")) return new Uri(new Uri(u), loc).AbsoluteUri;
                     }
                     var found = FindPortalUrlInText(r.Body);
@@ -835,7 +1014,7 @@ namespace Sicau
             string qs = "wlanuserip=" + ip;
             if (ac.Length > 0) qs += "&wlanacname=" + ac;
             if (nas.Length > 0) qs += "&nasip=" + nas;
-            return "https://" + portalHost + "/portal.do?" + qs;
+            return "https://" + portalHost + Site.PortalPath + "?" + qs;
         }
 
         public static string OutboundIP(string target)
@@ -844,7 +1023,7 @@ namespace Sicau
             {
                 using (var udp = new UdpClient())
                 {
-                    udp.Connect(target, 443);
+                    udp.Connect(target, Site.HttpsPort);
                     return ((IPEndPoint)udp.Client.LocalEndPoint).Address.ToString();
                 }
             }
@@ -1050,7 +1229,7 @@ namespace Sicau
             if (msid.Success) { sid = msid.Value; Log("会话号: " + sid); }
             else Log("页面里没找到会话号, 按无会话提交", "WARN");
 
-            string baseUrl = "https://" + c.PortalHost + "/webauth.do" + sid;
+            string baseUrl = "https://" + c.PortalHost + Site.WebAuthPath + sid;
             string target = urlParam.Length > 0 ? baseUrl + "?" + urlParam : baseUrl;
 
             string postBody = sb.ToString();

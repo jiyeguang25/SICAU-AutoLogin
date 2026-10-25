@@ -6,7 +6,7 @@ import android.content.SharedPreferences;
 public class Prefs {
     public String userId = "";
     public String password = "";
-    public String portalHost = "portal.sicau.edu.cn";
+    public String portalHost = Site.PORTAL_HOST;   // 域名的唯一来源: Site.java
     public String wlanAcName = "WJ-C10-Bras01-ME60-X8A";
     public String nasIp = "5.5.5.18";
     public int intervalMinutes = 15;
@@ -25,11 +25,26 @@ public class Prefs {
      */
     public boolean quietPortal = false;
 
+    /** 老版本存明文密码用的键，只在迁移时读一次，迁移完立刻删掉。 */
+    private static final String KEY_PWD_OLD = "password";
+    /** 新键：Keystore 加密后的 Base64 密文（见 Secret.java）。 */
+    private static final String KEY_PWD = "passwordEnc";
+
     public static Prefs load(Context ctx) {
         SharedPreferences sp = ctx.getSharedPreferences("sicau", Context.MODE_PRIVATE);
         Prefs p = new Prefs();
         p.userId = sp.getString("userId", "");
-        p.password = sp.getString("password", "");
+
+        // 密码：有密文就解密；只有明文（老配置）就先当明文用，结尾立刻加密回写。
+        // 解不开（换手机 / 清了 Keystore）就当没存，界面上会显示成没填，重输一次即可。
+        boolean needResave = false;
+        p.password = Secret.decrypt(sp.getString(KEY_PWD, ""));
+        String oldPlain = sp.getString(KEY_PWD_OLD, "");
+        if (p.password.length() == 0 && Secret.isLegacyPlain(oldPlain)) {
+            p.password = oldPlain;
+            needResave = true;
+        }
+
         p.portalHost = sp.getString("portalHost", p.portalHost);
         p.wlanAcName = sp.getString("wlanAcName", p.wlanAcName);
         p.nasIp = sp.getString("nasIp", p.nasIp);
@@ -39,13 +54,19 @@ public class Prefs {
         p.wifiSsid = sp.getString("wifiSsid", "");
         p.connectWifi = sp.getBoolean("connectWifi", false);
         p.quietPortal = sp.getBoolean("quietPortal", false);
+        if (needResave) {
+            try { p.save(ctx); } catch (Throwable ignored) { }   // 迁移失败不影响本次使用
+        }
         return p;
     }
 
     public void save(Context ctx) {
         SharedPreferences.Editor e = ctx.getSharedPreferences("sicau", Context.MODE_PRIVATE).edit();
         e.putString("userId", userId);
-        e.putString("password", password);
+        e.remove(KEY_PWD_OLD);   // 不管加密成不成功，旧明文键都得删，别在盘上留明文
+        String enc = Secret.encrypt(ctx, password);
+        if (enc.length() > 0) e.putString(KEY_PWD, enc);
+        else e.remove(KEY_PWD);  // 加密失败就当没存，绝不退回明文
         e.putString("portalHost", portalHost);
         e.putString("wlanAcName", wlanAcName);
         e.putString("nasIp", nasIp);
