@@ -57,7 +57,7 @@ namespace Sicau
     {
         public const string AppName = "SICAU-AutoLogin";
         /// <summary>版本号：只在「关于」和卸载列表里显示用。改版时同时改 build-win.ps1 的 $VER。</summary>
-        public const string AppVersion = "2.1";
+        public const string AppVersion = "2.2";
 
         // ---- 作者标识（用户要求在程序里带上自己的标识）----
         /// <summary>作者网名。</summary>

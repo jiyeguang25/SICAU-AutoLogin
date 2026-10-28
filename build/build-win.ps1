@@ -20,7 +20,7 @@
 # 注意同步改两处，否则"关于"里显示的和文件名会对不上：
 #   build\Core.cs              -> Core.AppVersion
 #   build\apk-src\AndroidManifest.xml -> versionName / versionCode（安卓每次发版必须 +1）
-$VER = '2.1'
+$VER = '2.2'
 # ------------------------------------------------------------------------
 
 $ErrorActionPreference = 'Stop'

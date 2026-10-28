@@ -5,6 +5,15 @@
 > 同一个宿舍/教学楼的网，每次开机、每次断线重连都要重新登一遍，有时候登录页还会抽风要你重输密码 ——
 > 这个工具就是为了省掉这一步。
 
+> ## ⚠️ 安卓版自 v2.1 起暂停更新
+>
+> **Windows 版继续更新**（当前 v2.2），**安卓版停在 v2.1**，不再加功能、也不再修 bug。
+>
+> - 想装安卓版：去 [v2.1 的发布页](https://github.com/jiyeguang25/SICAU-AutoLogin/releases/tag/v2.1) 下 `SICAU-AutoLogin-v2.1.zip`，里面有 apk。
+> - 别在 v2.2 的包里找 apk —— **从 v2.2 起，发布包只含 Windows 程序**，这是故意的，不是打包漏了。
+> - 为什么：安卓那套「改 WiFi / 读 WiFi 名」的权限从安卓 8.1 起一路收紧，真机验证成本太高，
+>   而日常用电脑挂热点给手机就够用了。哪天要继续，代码和签名密钥都还在仓库里。
+
 ---
 
 ## 它解决什么问题
@@ -28,25 +37,26 @@
 
 ## 下载与安装
 
-到本仓库的 **Releases** 页面下载最新那个 **`SICAU-AutoLogin-v2.1.zip`**（注意是 zip，不是 exe/apk）：
+到本仓库的 **Releases** 页面下载最新那个 **`SICAU-AutoLogin-v2.2.zip`**（注意是 zip，不是 exe）：
 
 1. 下载 zip → 右键 → **全部解压缩**（别在压缩包里直接双击）
-2. 进解压出来的文件夹，按平台取用：
+2. 进解压出来的文件夹，双击 `SICAU-win-2.2.exe`
 
 | 平台 | 压缩包里的文件 | 怎么装 |
 |---|---|---|
-| Windows 10 / 11 | `SICAU-win-2.1.exe` | 双击就能跑，免安装、无依赖（单文件） |
-| Android 6.0+ | `SICAU-android-2.1.apk` | 传到手机点开安装；提示「未知来源」时允许一下 |
+| Windows 10 / 11 | `SICAU-win-2.2.exe` | 双击就能跑，免安装、无依赖（单文件） |
+| Android 6.0+ | **本次不带 apk** | 安卓版停在 v2.1，去 [v2.1 发布页](https://github.com/jiyeguang25/SICAU-AutoLogin/releases/tag/v2.1) 下载 |
 
-> **版本号怎么看**：发布包版本和程序版本**是同一个数字**——`v2.1` 的包里就是程序 `2.1`，
-> 文件名 `SICAU-win-2.1.exe` 里的数字也是 `2.1`。
+> **版本号怎么看**：发布包版本和程序版本**是同一个数字**——`v2.2` 的包里就是程序 `2.2`，
+> 文件名 `SICAU-win-2.2.exe` 里的数字也是 `2.2`。
 > （2026-10-25 起统一。以前是「包版本 = 程序版本 + 0.1」，
 > 那种错位会让「检查更新」永远以为你有新版，已经废掉了。）
+> 唯一例外是**安卓停在 2.1**：它不跟着升，免得文件名写着 2.2 却还是旧代码。
 
 > **解压到哪：别长期放在「下载」文件夹里。** 下载目录一被清理，程序本体就跟着没了，
 > 开机自启会指向一个已经不存在的文件 —— 开机什么都不发生，也不报错（2026-10-06 就是这么翻车的）。
 > 建议解压到 `D:\Tools\SICAU-AutoLogin\` 这类固定目录，或者用安装模式：
-> `SICAU-win-2.1.exe --install`（复制到 `%LOCALAPPDATA%\Programs\SICAU-AutoLogin`，并把开机自启指过去）。
+> `SICAU-win-2.2.exe --install`（复制到 `%LOCALAPPDATA%\Programs\SICAU-AutoLogin`，并把开机自启指过去）。
 
 解压后先看 `下载说明.txt`，里面有每个文件的 SHA256，可以核对没有被掉包。
 
@@ -105,7 +115,7 @@
 
 ---
 
-## 怎么用（安卓）
+## 怎么用（安卓 · v2.1，已暂停更新）
 
 1. 装好后打开「校园网自动认证」
 2. 点**「i_sicau_wifi6」**或**「i_sicau」**按钮 —— 学校就这两个 WiFi 名，程序里已经做好了；
@@ -212,18 +222,24 @@ SICAU-win-<版本>.exe --hotspot repair             修复热点
 需要的东西：
 
 - **Windows 版**：.NET Framework 4.x 自带的 `csc.exe`（Windows 上本来就有，**不用装任何东西**）
-- **安卓版**：JDK 8+ 和 Android SDK 的 build-tools 35.0.0（放在 `build\sdk` 下，构建脚本会自己找）
+- **安卓版**：JDK 8+ 和 Android SDK 的 build-tools 35.0.0（放在 `build\sdk` 下，构建脚本会自己找）。
+  **注意：安卓端自 v2.1 起暂停更新**，下面的安卓命令留着是为了哪天恢复时能直接用。
 
 ```powershell
 # Windows：编译并更新项目根目录那份 EXE，顺便校正开机自启快捷方式
 powershell -NoProfile -ExecutionPolicy Bypass -File build\build-win.ps1
 
-# 安卓：打包签名，产物落到 android\SICAU-android-<版本>.apk
+# 安卓：打包签名，产物落到 android\SICAU-android-<版本>.apk（当前暂停，不跑）
 powershell -NoProfile -ExecutionPolicy Bypass -File build\build-apk.ps1
+
+# 发版打包：exe + 下载说明.txt 打成 release\SICAU-AutoLogin-v<版本>.zip
+powershell -NoProfile -ExecutionPolicy Bypass -File build\pack-release.ps1 -NoAndroid
+#   不加 -NoAndroid 就要求 apk 也在，两个平台一起发时才用
 ```
 
 - **发版改版本号**：Windows 改 `build-win.ps1` 顶部的 `$VER` 和 `Core.cs` 里的 `AppVersion`；
-  安卓改 `apk-src\AndroidManifest.xml` 的 `versionCode` + `versionName`。构建脚本会自动改名并删掉旧版本的包。
+  安卓改 `apk-src\AndroidManifest.xml` 的 `versionCode` + `versionName`。
+  **暂停期间安卓的这两个数字故意不动**（还是 11 / 2.1），免得出现「版本号升了但没有新包」。
 - **安卓签名**：用 `build\sicau.keystore`。**你自己发布一定要换成自己的 keystore**，否则升级安装会签名冲突。
 - **头像资源**：`powershell -File build\生成头像资源.ps1 -Source <你的方形头像>`，
   会同时生成 Windows 用的圆形 PNG（编进 EXE）和安卓各密度用的 JPEG。

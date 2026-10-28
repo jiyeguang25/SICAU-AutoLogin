@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 安卓端自 v2.1 起暂停更新（2026-10-28 用户决定）：Windows 版继续发版，
+     安卓包里还是 v2.1 的代码，所以 versionCode/versionName 故意保持 11 / 2.1，
+     不跟着 Windows 版升 —— 升了却没有新包，会让人以为装了新东西。 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="cn.edu.sicau.autologin"
     android:versionCode="11"

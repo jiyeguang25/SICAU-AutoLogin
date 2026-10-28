@@ -1,6 +1,7 @@
 # =====================================================================
-#  发版打包：把 exe + apk + 下载说明.txt 打成一个 zip
+#  发版打包：把 exe (+ apk) + 下载说明.txt 打成一个 zip
 #  用法: powershell -NoProfile -ExecutionPolicy Bypass -File pack-release.ps1
+#        powershell ... -File pack-release.ps1 -NoAndroid      # 只发 Windows 版
 #  产物: <项目根>\release\SICAU-AutoLogin-v<版本>.zip
 #
 #  为什么发 zip 不发裸 exe：浏览器下载的 exe 会带「来自 Internet」标记，
@@ -10,7 +11,13 @@
 #  版本号只有一个来源: build\Core.cs 的 Core.AppVersion。
 #  以前「包版本 = 程序版本 + 0.1」的错位规矩已废弃（2026-10-25 起统一），
 #  所以这里直接用程序版本当包版本，不再 +0.1。
+#
+#  -NoAndroid：安卓端自 v2.1 起暂停更新（2026-10-28 用户决定）。
+#  加了这个开关就不要求 apk 存在，zip 里只有 exe，下载说明里也写明
+#  「本次只发 Windows 版、安卓版停在 v2.1」—— 免得拿到包的人以为漏了文件。
 # =====================================================================
+
+param([switch]$NoAndroid)
 
 $ErrorActionPreference = 'Stop'
 
@@ -30,16 +37,18 @@ $ZIP = Join-Path $OUTDIR ('SICAU-AutoLogin-v' + $VER + '.zip')
 
 Write-Host ('=== 打包 v' + $VER + ' ===')
 
-# ---- 两个产物都得是"这一次构建的"，缺一个就不打 ------------------------
+# ---- 产物检查：exe 必须有；apk 只在没加 -NoAndroid 时要求 ---------------
+$need = if ($NoAndroid) { @($EXE) } else { @($EXE, $APK) }
 $bad = 0
-foreach ($f in @($EXE, $APK)) {
+foreach ($f in $need) {
     if (-not (Test-Path $f)) {
         Write-Host ('  ✗ 缺产物: ' + $f)
         $bad++
     }
 }
 if ($bad -gt 0) {
-    Write-Host '  先把两个平台都构建一遍: build-win.ps1 / build-apk.ps1'
+    if ($NoAndroid) { Write-Host '  先构建: build-win.ps1' }
+    else { Write-Host '  先把两个平台都构建一遍: build-win.ps1 / build-apk.ps1（安卓暂不发可加 -NoAndroid）' }
     exit 1
 }
 
@@ -50,17 +59,34 @@ New-Item -ItemType Directory -Force -Path $stage | Out-Null
 New-Item -ItemType Directory -Force -Path $OUTDIR | Out-Null
 
 Copy-Item $EXE (Join-Path $stage (Split-Path $EXE -Leaf)) -Force
-Copy-Item $APK (Join-Path $stage (Split-Path $APK -Leaf)) -Force
+if (-not $NoAndroid) { Copy-Item $APK (Join-Path $stage (Split-Path $APK -Leaf)) -Force }
 
 $h1 = (Get-FileHash $EXE -Algorithm SHA256).Hash.ToLower()
-$h2 = (Get-FileHash $APK -Algorithm SHA256).Hash.ToLower()
 Write-Host ('  exe ' + [math]::Round((Get-Item $EXE).Length/1KB,1) + ' KB  ' + $h1)
-Write-Host ('  apk ' + [math]::Round((Get-Item $APK).Length/1KB,1) + ' KB  ' + $h2)
+if ($NoAndroid) {
+    Write-Host '  apk 本次不发（安卓端自 v2.1 起暂停更新）'
+} else {
+    $h2 = (Get-FileHash $APK -Algorithm SHA256).Hash.ToLower()
+    Write-Host ('  apk ' + [math]::Round((Get-Item $APK).Length/1KB,1) + ' KB  ' + $h2)
+}
 
 # ---- 下载说明.txt ------------------------------------------------------
 $exeName = Split-Path $EXE -Leaf
-$apkName = Split-Path $APK -Leaf
+$apkName = if ($NoAndroid) { '' } else { Split-Path $APK -Leaf }
 $pad = 34
+if ($NoAndroid) {
+    $apkNote = @"
+【关于安卓版】
+这个压缩包里只有 Windows 程序，没有安卓版。
+安卓端从 v2.1 起暂停更新（没有新功能，也不再修 bug），
+最新可用版本仍是 v2.1：https://github.com/jiyeguang25/SICAU-AutoLogin/releases/tag/v2.1
+
+"@
+    $hashBlock = "  $($exeName.PadRight($pad))$h1"
+} else {
+    $apkNote = ''
+    $hashBlock = "  $($exeName.PadRight($pad))$h1`r`n  $($apkName.PadRight($pad))$h2"
+}
 $txt = @"
 下载说明 / README
 ========================================
@@ -76,13 +102,12 @@ $txt = @"
 1. 右键这个 zip -> 全部解压缩（不要直接在压缩包里双击运行）
 2. 进入解压出来的文件夹，双击里面的程序
 
-【校验文件没被掉包】
+$apkNote【校验文件没被掉包】
 PowerShell 里执行下面命令，和下面的哈希对比：
   Get-FileHash .\<文件名> -Algorithm SHA256
 
 SHA256:
-  $($exeName.PadRight($pad))$h1
-  $($apkName.PadRight($pad))$h2
+$hashBlock
 "@
 # 老规矩：给 .txt 带 BOM，记事本/手机都能正确识别中文
 [IO.File]::WriteAllText((Join-Path $stage '下载说明.txt'), ($txt -replace "`r?`n", "`r`n"), (New-Object Text.UTF8Encoding($true)))
