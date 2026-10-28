@@ -827,14 +827,16 @@ namespace Sicau
             {
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                ColumnCount = 2,
-                RowCount = 2,
+                ColumnCount = 4,
+                RowCount = 1,
                 BackColor = Theme.CardSolid,
                 Margin = new Padding(0)
             };
-            pnlChecks.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-            pnlChecks.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-            pnlChecks.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            // 四个勾选项原本是 2×2。但其实"排成一排"只是宽度问题，而每项文字都很短，
+            // 挤一排能省下整整一行高度（约 48px），对"更小巧"更划算。
+            // 四列都用 AutoSize: 字数变了不会把后面的字挤掉。
+            for (int i = 0; i < 4; i++)
+                pnlChecks.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             pnlChecks.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             chkAutostart = new CheckBox
@@ -860,7 +862,7 @@ namespace Sicau
             };
             chkQuietPortal = new CheckBox
             {
-                Text = "不自动弹校园网登录页",
+                Text = "不自动弹登录页",
                 AutoSize = true,
                 Font = Fonts.UI,
                 ForeColor = Theme.Ink,
@@ -869,10 +871,15 @@ namespace Sicau
                 Margin = new Padding(0)
             };
             chkShow.Anchor = AnchorStyles.Left;
+            // 四个排一排: 前三项右边留 18px 间距, 最后一项不留（否则右侧多出一块空白）
+            chkAutostart.Margin = Theme.Pad(0, 0, 18, 0);
+            chkAutoHotspot.Margin = Theme.Pad(0, 0, 18, 0);
+            chkQuietPortal.Margin = Theme.Pad(0, 0, 18, 0);
+            chkShow.Margin = new Padding(0);
             pnlChecks.Controls.Add(chkAutostart, 0, 0);
             pnlChecks.Controls.Add(chkAutoHotspot, 1, 0);
-            pnlChecks.Controls.Add(chkQuietPortal, 0, 1);
-            pnlChecks.Controls.Add(chkShow, 1, 1);
+            pnlChecks.Controls.Add(chkQuietPortal, 2, 0);
+            pnlChecks.Controls.Add(chkShow, 3, 0);
 
             cardChecks.Controls.Add(pnlChecks);
             root.Controls.Add(cardChecks, 0, 2);
@@ -911,6 +918,8 @@ namespace Sicau
             tips.SetToolTip(btnInstall, "安装到其他目录");
             tips.SetToolTip(btnUninstall, "卸载开机自启与安装");
             tips.SetToolTip(btnAbout, "关于 SICAU-AutoLogin");
+            // 为了四个勾选项挤进一排，这项文字缩短了，全名放这里
+            tips.SetToolTip(chkQuietPortal, "不自动弹出校园网登录页（改的是 Windows 的联网探测，需要管理员权限）");
 
             // ---------------- 状态 ----------------
             lblStatus = new Label
