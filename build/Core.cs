@@ -385,12 +385,13 @@ namespace Sicau
                 info.LatestTag = tag.Groups[1].Value.Trim();
                 var url = Regex.Match(r.Body, "\"html_url\"\\s*:\\s*\"([^\"]+)\"");
                 if (url.Success) info.Url = url.Groups[1].Value;
-                // 本项目的 tag 是**发布包版本**, 按老规矩 = 程序版本 + 0.1(见 README「版本号怎么看」)。
-                // 所以拿 tag 直接跟 AppVersion 比会永远显示"有新版本": v2.0 的包里装的是程序 1.9。
-                // 正确做法是从附件名里取程序版本(SICAU-win-1.9.exe / SICAU-android-1.9.apk),
-                // 取不到(比如老版本没传附件)才退回 tag —— 那种情况下宁可比错也不要漏提示。
+                // 从附件名里取程序版本：老包是 SICAU-win-1.9.exe / SICAU-android-1.9.apk，
+                // 从 v2.2 起发布包只有 Windows、附件是 SICAU-AutoLogin-v2.2.zip，所以两种都要认。
+                // 都取不到（比如老版本没传附件）才退回 tag —— 那种情况下宁可比错也不要漏提示。
                 var asset = Regex.Match(r.Body ?? "", "SICAU-(?:win|android)-(\\d+(?:\\.\\d+)*)\\.(?:exe|apk)");
-                info.RemoteVersion = asset.Success ? asset.Groups[1].Value : info.LatestTag;
+                if (!asset.Success)
+                    asset = Regex.Match(r.Body ?? "", "SICAU-AutoLogin-v(\\d+(?:\\.\\d+)*)\\.zip");
+                info.RemoteVersion = asset.Success ? asset.Groups[1].Value : info.LatestTag.TrimStart('v', 'V');
                 info.HasNewer = CompareVersion(info.RemoteVersion, AppVersion) > 0;
                 info.Ok = true;
                 return info;
