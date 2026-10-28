@@ -26,6 +26,52 @@ namespace Sicau
         [STAThread]
         static void Main(string[] args)
         {
+            // ---- 兜底：程序出事也要留下痕迹，并给用户一句人话 ----
+            // 为什么需要：2026-10-28 那次界面重做，启动崩溃在用户那边只表现为
+            // 「点了一下、窗口没出来、进程没了」；日志里只有退出码 0xE0434352 和一行
+            // “Exception.ToString() 失败”。没有这段话，用户只能干瞪眼。
+            // 现在任何未处理异常都会：① 写进日志 ② 弹一个能看懂的中文提示 ③ 告诉用户日志在哪。
+            AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+            {
+                try { Core.Log("未捕获异常: " + e.ExceptionObject, "ERROR"); } catch { }
+                try
+                {
+                    MessageBox.Show(
+                        "程序遇到意外错误，已经记进日志：\n" + Core.CurrentLogPath() +
+                        "\n\n可以在主界面点「复制」把日志发给维护的同学。",
+                        "校园网自动认证", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                catch { }
+            };
+            Application.ThreadException += (s, e) =>
+            {
+                try { Core.Log("界面线程异常: " + e.Exception, "ERROR"); } catch { }
+                try
+                {
+                    MessageBox.Show(
+                        "界面出了点问题：" + e.Exception.Message + "\n\n详情已写进日志：" + Core.CurrentLogPath(),
+                        "校园网自动认证", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                catch { }
+            };
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+
+            try { MainCore(args); }
+            catch (Exception ex)
+            {
+                try { Core.Log("启动失败: " + ex, "ERROR"); } catch { }
+                try
+                {
+                    MessageBox.Show(
+                        "启动失败：" + ex.Message + "\n\n日志：" + Core.CurrentLogPath(),
+                        "校园网自动认证", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                catch { }
+            }
+        }
+
+        static void MainCore(string[] args)
+        {
             Core.InitPaths();
             Core.RemoveLegacyTask();   // 老版本用计划任务自启, 被 Defender 判成恶意持久化, 见到就清掉
             Theme.InitScale();       // 先量出系统 DPI, 布局尺寸全靠它换算, 否则高分屏上字会被挤
@@ -271,6 +317,10 @@ namespace Sicau
                 if (!string.IsNullOrEmpty(o.Reason)) detail = o.Reason;
                 else if (!string.IsNullOrEmpty(o.Message)) detail = o.Message;
                 else detail = "原因未知，可以点「留在托盘」打开主界面看日志。";
+                // 结论后面补一句"下一步做什么"：这个窗口多半是刚开机时看到的，
+                // 只给一个名词（「密码错误」）等于让人自己猜。
+                string adv = Core.Advice(detail);
+                if (adv.Length > 0) detail = detail + "\n\n" + adv;
             }
 
             Color dot = ok ? Theme.Ok : Theme.Err;
@@ -415,7 +465,7 @@ namespace Sicau
         Stepper numInterval, numLogKeep;
         Label lblStatus, lblHint, lblLogKeepHint;
         Win11Button btnSave, btnAuth, btnHotOn, btnHotOff, btnHotStatus, btnOpen, btnClear, btnProbe;
-        Win11Button btnInstall, btnUninstall, btnAbout, btnRepair;
+        Win11Button btnInstall, btnUninstall, btnAbout, btnRepair, btnCopyLog;
         ToolTip tips;      // 按钮名为了挤进一排被缩短了, 全名在这里
         DropDown cboBand, cboTheme, cboBoot;
         // 连接方式: 0=自动, 1=仅有线, 2=仅无线。
@@ -841,6 +891,9 @@ namespace Sicau
                 pnl.Controls.Add(Gap());
                 pnl.Controls.Add(btnOpen = MkB("目录", false, (s, e) => { try { Process.Start("explorer.exe", "\"" + Core.Dir + "\""); } catch { } }));
                 pnl.Controls.Add(btnClear = MkB("清空", false, (s, e) => txtLog.Clear()));
+                // 「复制」是为了让求助变得便宜: 以前同学出问题只能说"不好使",
+                // 现在点一下就拿到带时间戳的完整日志, 贴过来就能定位。
+                pnl.Controls.Add(btnCopyLog = MkB("复制", false, (s, e) => DoCopyLog()));
                 pnl.Controls.Add(btnInstall = MkB("换目录", false, (s, e) => DoInstallTo()));
                 pnl.Controls.Add(btnUninstall = MkB("卸载", false, (s, e) => DoUninstall()));
                 pnl.Controls.Add(btnAbout = MkB("关于", false, (s, e) => ShowAbout()));
@@ -854,6 +907,7 @@ namespace Sicau
             tips.SetToolTip(btnProbe, "检测当前连接状态");
             tips.SetToolTip(btnOpen, "打开配置和日志所在目录");
             tips.SetToolTip(btnClear, "清空日志显示");
+            tips.SetToolTip(btnCopyLog, "复制日志全文到剪贴板（反馈问题时贴给别人）");
             tips.SetToolTip(btnInstall, "安装到其他目录");
             tips.SetToolTip(btnUninstall, "卸载开机自启与安装");
             tips.SetToolTip(btnAbout, "关于 SICAU-AutoLogin");
@@ -1318,6 +1372,42 @@ namespace Sicau
             try { Dwm.SetTitleBarDark(Handle, Theme.Dark); } catch { }
             ScanWifiAsync();
             LoadHotspotInfoAsync();
+            StartAutoUpdateCheck();
+        }
+
+        /// <summary>
+        /// 每 7 天在后台问一次「有没有新版本」。
+        ///
+        /// 为什么需要它: 检查更新藏在「关于」里, 绝大多数同学一辈子不会点,
+        /// 于是永远停在旧版本 —— 而旧版本正是修掉的 bug。
+        /// 为什么可以放心跑: 失败一律静默(校园网里 api.github.com 常常不通),
+        /// 只有真的有新版才写一行日志 + 一个托盘气泡, 不会刷屏。
+        /// </summary>
+        void StartAutoUpdateCheck()
+        {
+            try { if (!Core.UpdateCheckDue()) return; }
+            catch { return; }
+            Task.Run(() =>
+            {
+                Core.Update.Info info;
+                try { info = Core.Update.Check(); } catch { return; }
+                if (info == null || !info.Ok) return;    // 不通不算查过: 下次启动再试
+                Core.MarkUpdateChecked();
+                if (!info.HasNewer) return;
+                try
+                {
+                    BeginInvoke(new Action(() =>
+                    {
+                        AppendLog("发现新版本 v" + info.RemoteVersion.TrimStart('v', 'V')
+                                  + "（当前 v" + Core.AppVersion + "）：打开「关于」可以点「打开下载页」");
+                        if (tray != null && tray.Visible)
+                            tray.ShowBalloonTip(4000, "校园网自动认证",
+                                "有新版本 v" + info.RemoteVersion.TrimStart('v', 'V') + "，打开「关于」可更新",
+                                ToolTipIcon.Info);
+                    }));
+                }
+                catch { }
+            });
         }
 
         // ------------------------------------------------ 托盘
@@ -1692,6 +1782,27 @@ namespace Sicau
             return "auto";
         }
 
+        /// <summary>
+        /// 把日志区里看得见的内容整段放进剪贴板。
+        /// 只复制界面上的那份（和文件里是同一批行），不额外读盘，
+        /// 免得用户正在写日志时把文件锁住。
+        /// </summary>
+        void DoCopyLog()
+        {
+            try
+            {
+                string text = txtLog.Text == null ? "" : txtLog.Text.Trim();
+                if (text.Length == 0) { SetStatus("日志是空的，没有可复制的内容", Theme.InkDim); return; }
+                // WinForms 剪贴板对大段文本没有硬上限，但几十万字贴进聊天窗口也没人看，
+                // 留最后 20 万字足够定位问题。
+                const int cap = 200000;
+                if (text.Length > cap) text = text.Substring(text.Length - cap);
+                Clipboard.SetText(text);
+                SetStatus("日志已复制到剪贴板", Theme.Ok);
+            }
+            catch (Exception ex) { SetStatus("复制失败: " + ex.Message, Theme.Err); }
+        }
+
         void SetStatus(string text, Color color)
         {
             if (InvokeRequired) { BeginInvoke(new Action(() => SetStatus(text, color))); return; }
@@ -1835,6 +1946,23 @@ namespace Sicau
         }
 
         // ------------------------------------------------ 修复热点
+        /// <summary>
+        /// 给从没设置过热点的机器编一组默认名称/密码。
+        ///
+        /// 密码字符集去掉了 l、i、o、0、1 这类看着像的字符 ——
+        /// 这串是要用户拿手机一个字母一个字母手输的, 认错一个字母就连不上。
+        /// 名称带 SICAU- 前缀, 4 位取自密码前四位, 便于在手机上认出来是哪台电脑。
+        /// </summary>
+        static void MakeHotspotDefaults(out string name, out string pass)
+        {
+            const string alpha = "abcdefghjkmnpqrstuvwxyz23456789";
+            var rnd = new Random(Guid.NewGuid().GetHashCode());
+            var sb = new StringBuilder();
+            for (int i = 0; i < 10; i++) sb.Append(alpha[rnd.Next(alpha.Length)]);
+            pass = sb.ToString();
+            name = "SICAU-" + pass.Substring(0, 4);
+        }
+
         /// <summary>后台读出当前热点的名称/密码, 填进输入框。</summary>
         void LoadHotspotInfoAsync()
         {
@@ -1846,6 +1974,25 @@ namespace Sicau
                 if (!ok)
                 {
                     AppendLog("读不到热点配置。原因: " + why);
+                    // 读不到有两种情况: 这台机器从来没设置过热点(新装机常见), 或者读失败了。
+                    // 两栏都空着时按"没有热点"处理, 直接帮他填一组能用的默认值 ——
+                    // 否则用户点「开热点」只会收到一句系统报错, 还得自己去系统设置里翻。
+                    if (txtHotspotSsid.Text.Trim().Length == 0 && txtHotspotPass.Text.Length == 0)
+                    {
+                        string dn, dp;
+                        MakeHotspotDefaults(out dn, out dp);
+                        try
+                        {
+                            BeginInvoke(new Action(() =>
+                            {
+                                txtHotspotSsid.Text = dn;
+                                txtHotspotPass.Text = dp;
+                            }));
+                        }
+                        catch { }
+                        AppendLog("这台机器还没设置过热点，已按下述值填好：名称 " + dn + "，密码 " + dp);
+                        AppendLog("（点「保存」就写进系统生效；不需要热点可以把这两栏清空）");
+                    }
                     AppendLog("（点「热点状态」可以重试一次；如果你刚在系统「设置」里改过热点名称或密码，"
                               + "等一两秒再点——系统要一点时间切换）");
                     return;
@@ -1998,7 +2145,12 @@ namespace Sicau
                     var o = Core.DoAuth(c, force);
                     if (o.Ok && o.AlreadyOnline) SetStatus("已联网，无需认证", Theme.Ok);
                     else if (o.Ok) SetStatus("认证成功", Theme.Ok);
-                    else SetStatus(o.Message, Theme.Err);
+                    else
+                    {
+                        SetStatus(o.Message, Theme.Err);
+                        string adv = Core.Advice(o.Message);
+                        if (adv.Length > 0) AppendLog("建议：" + adv);
+                    }
                     SetTrayState(o.Ok);
 
                     // 选了「认证成功后自动退出程序」的: 手动点「立即认证」成功也一样收尾退出,
@@ -2256,6 +2408,7 @@ namespace Sicau
                     var th = new System.Threading.Thread(() =>
                     {
                         var info = Core.Update.Check();
+                        if (info.Ok) Core.MarkUpdateChecked();   // 手动查过就记一笔, 免得启动时又自动查一次
                         try
                         {
                             if (f.IsDisposed) return;

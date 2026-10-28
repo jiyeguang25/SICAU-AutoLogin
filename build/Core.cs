@@ -57,7 +57,7 @@ namespace Sicau
     {
         public const string AppName = "SICAU-AutoLogin";
         /// <summary>版本号：只在「关于」和卸载列表里显示用。改版时同时改 build-win.ps1 的 $VER。</summary>
-        public const string AppVersion = "2.2";
+        public const string AppVersion = "2.3";
 
         // ---- 作者标识（用户要求在程序里带上自己的标识）----
         /// <summary>作者网名。</summary>
@@ -321,12 +321,60 @@ namespace Sicau
             }
         }
 
-        // ------------------------------------------------ 检查更新(只在用户点击时跑)
+        // ------------------------------------------------ 自动检查更新的节流
+        /// <summary>
+        /// 「上次成功检查更新」的时间戳，存在配置目录的一个小文件里。
+        ///
+        /// 为什么单独一个文件而不塞进 config.conf: config.conf 是用户也可能手改的
+        /// 配置文件, 为了一个时间戳去动它的结构不值当。
+        /// 为什么存 ticks 而不是日期字符串: 免掉区域设置与时区解析,
+        /// 换台机器、换个系统语言都不会解析失败。
+        /// </summary>
+        public static string UpdateStampPath()
+        {
+            return Path.Combine(Dir, "update-check.txt");
+        }
+
+        public static DateTime LastUpdateCheckUtc()
+        {
+            try
+            {
+                string p = UpdateStampPath();
+                if (!File.Exists(p)) return DateTime.MinValue;
+                long ticks;
+                if (long.TryParse(File.ReadAllText(p, Encoding.UTF8).Trim(), out ticks) && ticks > 0)
+                    return new DateTime(ticks, DateTimeKind.Utc);
+            }
+            catch { }
+            return DateTime.MinValue;
+        }
+
+        public static void MarkUpdateChecked()
+        {
+            try { File.WriteAllText(UpdateStampPath(), DateTime.UtcNow.Ticks.ToString(), new UTF8Encoding(false)); }
+            catch { }
+        }
+
+        /// <summary>
+        /// 该不该自动查一次: 从没成功查过, 或者上次成功查过已超过 age(默认 7 天)。
+        /// 只认「成功」的那次: 网络不通不算查过 —— 否则校园网里失败一次,
+        /// 这台机器往后七天都不会再试。
+        /// </summary>
+        public static bool UpdateCheckDue(TimeSpan? age = null)
+        {
+            DateTime last = LastUpdateCheckUtc();
+            if (last == DateTime.MinValue) return true;
+            return (DateTime.UtcNow - last) > (age ?? TimeSpan.FromDays(7));
+        }
+
+        // ------------------------------------------------ 检查更新(手动 + 每 7 天自动一次)
         /// <summary>
         /// 查 GitHub Releases 的最新版本。
         ///
-        /// 只在用户点「检查更新」时调用: 不做后台轮询、不做静默下载 ——
-        /// 校园网里 api.github.com 常常是不通的, 后台轮询只会刷一屏失败日志。
+        /// 手动: 用户点「检查更新」。
+        /// 自动: 启动时若距上次成功检查超过 7 天, 在后台查一次(见 App.StartAutoUpdateCheck)——
+        ///       **只在真的有新版时才说话**, 失败一律静默, 所以不会像后台轮询那样
+        ///       在校园网里刷一屏失败日志。
         /// 所有失败都翻译成中文可读串放进 Error, 绝不外抛异常。
         /// </summary>
         public static class Update
@@ -1160,6 +1208,41 @@ namespace Sicau
             };
             for (int i = 0; i < rules.GetLength(0); i++)
                 if (t.IndexOf(rules[i, 0], StringComparison.Ordinal) >= 0) return rules[i, 1];
+            return "";
+        }
+
+        /// <summary>
+        /// 把失败原因翻译成「下一步该做什么」。
+        ///
+        /// 为什么要有这道工序: 门户只会给结论 ——「密码错误」「在线数已达上限」。
+        /// 老用户看到结论知道怎么办, 新同学不知道; 而开机自动认证失败的那个弹窗,
+        /// 往往是人刚开机、还没睡醒的时候看到的, 更需要一句具体的动作而不是一个名词。
+        ///
+        /// 这里刻意**不写任何具体网址**: 学校门户改版、换域名、换自助服务地址都不会
+        /// 让这段建议变成错的。只说「去哪里做什么」。
+        /// </summary>
+        public static string Advice(string message)
+        {
+            if (string.IsNullOrEmpty(message)) return "";
+            string m = message;
+            Func<string, bool> has = k => m.IndexOf(k, StringComparison.Ordinal) >= 0;
+
+            if (has("学号或密码") || has("请填写"))
+                return "先填上学号和密码：在主界面输入，然后点「保存」。";
+            if (has("密码错误") || has("密码不正确") || has("账号或密码"))
+                return "确认是不是最近改过密码（比如在学校的统一身份认证平台改过）：在主界面重新输入密码，点「保存」再点「认证」。";
+            if (has("账号不存在"))
+                return "学号可能写错了：检查有没有漏位、有没有多打空格。";
+            if (has("欠费") || has("余额不足"))
+                return "先去充值，到账后再点「认证」。";
+            if (has("停机") || has("锁定") || has("禁用"))
+                return "账号状态不正常，需要先到学校网络中心或自助服务恢复，之后才能认证。";
+            if (has("在线设备数") || has("已达上限") || has("超限") || has("重复认证"))
+                return "同一账号一般只允许一台设备在线：先把手机或平板上的校园网断掉，再点「认证」。";
+            if (has("无法确定认证页") || has("打开认证页失败") || has("认证页返回"))
+                return "多半是还没接入校园网：先连上「i_sicau」或「i_sicau_wifi6」，插网线的确认网线是通的，再点「认证」。";
+            if (has("提交认证请求失败") || has("认证后仍未联网"))
+                return "门户响应不正常，通常是网络抖动：等十几秒再点一次；一直这样就点「复制」把日志发给维护的同学。";
             return "";
         }
 
