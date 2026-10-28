@@ -507,7 +507,9 @@ namespace Sicau
             sb.AppendLine("forceipv4=" + (c.ForceIPv4 ? "1" : "0"));
             sb.AppendLine("intervalminutes=" + c.IntervalMinutes);
             sb.AppendLine("autohotspot=" + (c.AutoHotspot ? "1" : "0"));
-            sb.AppendLine("mode=" + ConcreteMode(c.Mode));   // 不再写 auto: 连接方式必须落成具体的"有线/无线"
+            // 连接方式把「自动」原样存下来: 自动 = 每次认证时再看哪块网卡在线。
+            // 要是这里落成具体的 wired/wifi, 下次换了连接方式(比如拔了网线)就得手动改一遍。
+            sb.AppendLine("mode=" + (string.IsNullOrEmpty(c.Mode) ? "auto" : c.Mode.Trim().ToLowerInvariant()));
             sb.AppendLine("wifissid=" + (c.WifiSsid == null ? "" : c.WifiSsid));
             sb.AppendLine("hotspotband=" + (string.IsNullOrEmpty(c.HotspotBand) ? "auto" : c.HotspotBand));
             sb.AppendLine("theme=" + (string.IsNullOrEmpty(c.Theme) ? "auto" : c.Theme));
@@ -783,14 +785,17 @@ namespace Sicau
         /// <summary>连接方式的中文名(日志和提示用)。</summary>
         public static string ModeCn(string mode)
         {
-            return string.Equals(mode, "wifi", StringComparison.OrdinalIgnoreCase) ? "仅无线" : "仅有线";
+            if (string.Equals(mode, "wifi", StringComparison.OrdinalIgnoreCase)) return "仅无线";
+            if (string.Equals(mode, "wired", StringComparison.OrdinalIgnoreCase)) return "仅有线";
+            return "自动";
         }
 
         /// <summary>
-        /// 连接方式只有「有线」「无线」两种 —— 主界面上方的页签就是选择方式, 没有"自动"这一项。
-        /// 老配置里可能是 auto(或空值、认不出的值), 这里按当前插着哪块网卡定死一个:
-        /// 有有线 IP 就用有线(宿舍/机房普遍插着网线), 没有有线 IP 才用无线。
-        /// 两块网卡都还没拿到 IP(刚开机 DHCP 没完成)时按有线, 找不到网卡再回退系统路由。
+        /// 把配置里的连接方式落成具体的「有线」或「无线」。
+        /// 界面上是三选一(自动 / 仅有线 / 仅无线), 其中「自动」不是一个固定值:
+        /// 它表示"等真要认证的时候再看哪块网卡在线", 所以每次认证都要过这个函数。
+        /// 判断依据是哪块网卡拿到了 IPv4: 有有线 IP 就用有线(宿舍/机房普遍插网线),
+        /// 没有才用无线; 两块都还没拿到 IP(刚开机 DHCP 没完成)时按有线。
         /// </summary>
         public static string ConcreteMode(string mode)
         {

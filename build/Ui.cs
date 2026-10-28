@@ -66,8 +66,8 @@ namespace Sicau
         // 另一个不透明的同色版本：CardSolid = Card 压在自己的底色上算出来的实色。
         public static Color CardSolid   = Color.FromArgb(0xFF, 0xFF, 0xFF);
         public static Color CardBorder  = Color.FromArgb(0xE8, 0xE8, 0xE8);
-        public static Color InputBorder = Color.FromArgb(0xD8, 0xD8, 0xD8);
-        public static Color FieldBg     = Color.FromArgb(0xFF, 0xFF, 0xFF);
+        public static Color InputBorder = Color.FromArgb(0xC9, 0xCF, 0xDA);
+        public static Color FieldBg     = Color.FromArgb(0xF4, 0xF6, 0xFA);   // 亮色下卡片是 #FEFFFF, 输入框再白就分不出边界了
         public static Color Accent      = Color.FromArgb(0x1E, 0x66, 0xF5);
         public static Color AccentHover = Color.FromArgb(0x3B, 0x7B, 0xF6);
         public static Color AccentDown  = Color.FromArgb(0x1A, 0x57, 0xD0);
@@ -99,7 +99,7 @@ namespace Sicau
                 CardSolid   = Color.FromArgb(0xFE, 0xFF, 0xFF);
                 CardBorder  = Color.FromArgb(26, 0x4C, 0x4F, 0x69);
                 InputBorder = Color.FromArgb(42, 0x4C, 0x4F, 0x69);
-                FieldBg     = Color.FromArgb(0xFF, 0xFF, 0xFF);
+                FieldBg     = Color.FromArgb(0xF4, 0xF6, 0xFA);   // 亮色下卡片是 #FEFFFF, 输入框再白就分不出边界了
                 Accent      = Color.FromArgb(0x1E, 0x66, 0xF5);   // blue
                 AccentHover = Color.FromArgb(0x3B, 0x7B, 0xF6);
                 AccentDown  = Color.FromArgb(0x1A, 0x57, 0xD0);
@@ -305,15 +305,14 @@ namespace Sicau
             Radius = Theme.RField;
             Fill = Theme.FieldBg;
             Line = Theme.InputBorder;
-            Padding = Theme.Pad(11, 8, 11, 8);
+            Padding = Theme.Pad(11, 6, 11, 6);   // 上下留 6: 32 高的框里正好把 23px 的字摆中间
             Width = Theme.Px(width);
-            Height = Theme.Px(36);
+            Height = Theme.Px(32);
             Margin = Theme.Pad(0, 0, 0, 10);
 
             Inner = new TextBox
             {
                 BorderStyle = BorderStyle.None,
-                Dock = DockStyle.Fill,
                 Font = Fonts.UI,
                 BackColor = Theme.FieldBg,
                 ForeColor = Theme.Ink
@@ -321,6 +320,26 @@ namespace Sicau
             Inner.GotFocus += (s, e) => { Line = Theme.Accent; Invalidate(); };
             Inner.LostFocus += (s, e) => { Line = Theme.InputBorder; Invalidate(); };
             Controls.Add(Inner);
+        }
+
+        /// <summary>
+        /// 把打字框在垂直方向摆正。
+        /// 原来给 Inner 的是 Dock = Fill, 但单行 TextBox 的高度由字体算出来
+        /// (实测 22px), Dock 只能把它拉宽、拉不高: 于是在 54px 高的框里,
+        /// 字上面留 12px、下面留 20px, 看着就是"字贴着上沿"。
+        /// 改成自己算 (Height - PreferredHeight) / 2。
+        /// </summary>
+        protected override void OnLayout(LayoutEventArgs e)
+        {
+            base.OnLayout(e);
+            if (Inner == null) return;
+            int h = Inner.PreferredHeight;
+            int x = Padding.Left;
+            int w = Width - Padding.Horizontal;
+            if (w < Theme.Px(8)) w = Theme.Px(8);
+            int y = (Height - h) / 2;
+            if (y < 0) y = 0;
+            Inner.Bounds = new Rectangle(x, y, w, h);
         }
 
         public override string Text
@@ -368,6 +387,7 @@ namespace Sicau
         TextBox editor;
         bool hover, open, focused;
         int arrowW;
+        PopupList pop;   // 展开在窗体里的候选列表(见 PopupList)
 
         public int MaxDropHeight = 240;
 
@@ -380,7 +400,7 @@ namespace Sicau
             BackColor = Theme.CardSolid;
             Font = Fonts.UI;
             Width = Theme.Px(width);
-            Height = Theme.Px(36);
+            Height = Theme.Px(32);
             Margin = Theme.Pad(0, 0, 0, 10);
             TabStop = true;
             arrowW = Theme.Px(26);
@@ -401,8 +421,7 @@ namespace Sicau
                         BorderStyle = BorderStyle.None,
                         Font = Fonts.UI,
                         BackColor = Theme.FieldBg,
-                        ForeColor = Theme.Ink,
-                        Dock = DockStyle.Fill
+                        ForeColor = Theme.Ink
                     };
                     editor.TextChanged += delegate { OnTextChanged(EventArgs.Empty); };
                     editor.LostFocus += delegate { focused = false; Invalidate(); };
@@ -537,70 +556,237 @@ namespace Sicau
             }
         }
 
-        /// <summary>弹出候选列表。用无边框窗体做, 因为它不会抢走输入焦点太多,
-        /// 而且点别处就 Deactivate 自动关掉。</summary>
+        /// <summary>
+        /// 打开候选列表。
+        /// 旧实现开的是独立无边框窗体: 它要 Show + Activate 才响应鼠标, 关它只能
+        /// 靠 Deactivate, 但点 DropDown 自身并不会让弹层失活 —— 于是旧列表留在
+        /// 屏幕上、再点就叠起来, 用起来就是「下拉卡住」。现在换成本窗体里的
+        /// 子控件 PopupList: 打开时抓鼠标, 点外面/滚轮/回车/Esc 都能确定地关。
+        /// </summary>
         void OpenPopup()
         {
             if (items.Count == 0) return;
+            DropPopup();
+            var host = FindForm();
+            if (host == null) return;
 
-            var pop = new Form
-            {
-                FormBorderStyle = FormBorderStyle.None,
-                ShowInTaskbar = false,
-                StartPosition = FormStartPosition.Manual,
-                BackColor = Theme.FieldBg,
-                Padding = new Padding(1),
-                AutoScaleMode = AutoScaleMode.None
-            };
-            var lb = new ListBox
-            {
-                BorderStyle = BorderStyle.None,
-                DrawMode = DrawMode.OwnerDrawFixed,
-                Font = Font,
-                BackColor = Theme.FieldBg,
-                ForeColor = Theme.Ink,
-                ItemHeight = Theme.Px(26),
-                IntegralHeight = false,
-                Dock = DockStyle.Fill
-            };
-            for (int i = 0; i < items.Count; i++) lb.Items.Add(items[i]);
-
-            lb.DrawItem += (s, e) =>
-            {
-                if (e.Index < 0) return;
-                bool isSel = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-                using (var b = new SolidBrush(isSel ? Theme.AccentSoft : Theme.FieldBg))
-                    e.Graphics.FillRectangle(b, e.Bounds);
-                var tr = new Rectangle(e.Bounds.X + Theme.Px(10), e.Bounds.Y,
-                                       e.Bounds.Width - Theme.Px(14), e.Bounds.Height);
-                TextRenderer.DrawText(e.Graphics, lb.Items[e.Index].ToString(), Font, tr,
-                    isSel ? Theme.Accent : Theme.Ink,
-                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
-            };
-            lb.Click += (s, e) =>
-            {
-                if (lb.SelectedIndex >= 0) { SelectedIndex = lb.SelectedIndex; }
-                pop.Close();
-            };
-            lb.KeyDown += (s, e) =>
-            {
-                if (e.KeyCode == Keys.Escape) { pop.Close(); }
-                else if (e.KeyCode == Keys.Enter && lb.SelectedIndex >= 0) { SelectedIndex = lb.SelectedIndex; pop.Close(); }
-            };
-
-            pop.Controls.Add(lb);
+            int rowH = Theme.Px(26);
             int rows = Math.Min(items.Count, 8);
-            pop.ClientSize = new Size(Width, rows * lb.ItemHeight + 2);
-            if (sel >= 0) lb.SelectedIndex = sel;
+            var list = new PopupList();
+            list.Items = items.ToArray();
+            list.Sel = sel;
+            list.RowH = rowH;
+            list.PageRows = rows;
 
-            Point p = PointToScreen(new Point(0, Height + Theme.Px(2)));
-            pop.Location = p;
+            var here = host.PointToClient(PointToScreen(new Point(0, 0)));
+            int h = rows * rowH + Theme.Px(8);
+            int top = here.Y + Height + Theme.Px(2);
+            int limit = host.ClientSize.Height - Theme.Px(4);
+            if (top + h > limit)
+            {
+                int above = here.Y - h - Theme.Px(2);   // 翻到上面
+                if (above >= Theme.Px(4)) top = above;
+                else
+                {
+                    // 上下都放不下(窗口很小): 贴着底边, 行数减到放得下的最大值
+                    int fit = (limit - (here.Y + Height) - Theme.Px(6)) / rowH;
+                    if (fit < 3) fit = 3;
+                    if (fit > items.Count) fit = items.Count;
+                    list.PageRows = fit;
+                    h = fit * rowH + Theme.Px(8);
+                    top = Math.Max(Theme.Px(4), limit - h);
+                }
+            }
+            list.Bounds = new Rectangle(here.X, top, Width, h);
+
+            list.Committed += delegate(int i) { SelectedIndex = i; DropPopup(); };
+            list.Dismissed += delegate { DropPopup(); };
+            host.Controls.Add(list);
+            list.BringToFront();
+            pop = list;
             open = true;
             Invalidate();
-            pop.Show(this);
-            pop.Activate();
-            lb.Focus();
-            pop.FormClosed += delegate { open = false; Invalidate(); };
+            list.Open();
+        }
+
+        void DropPopup()
+        {
+            open = false;
+            var p = pop;
+            pop = null;
+            if (p != null)
+            {
+                if (p.Parent != null) p.Parent.Controls.Remove(p);
+                p.Dispose();
+            }
+            Invalidate();
+        }
+    }
+
+    // ================================================================
+    //  下拉弹出的候选列表: 本窗体里的一个子控件, 不是独立窗体
+    //  独立窗体(Form)做弹层的三个坑, 表现都是「卡住」:
+    //   1) 它要 Show + Activate 才吃鼠标, 而 Activate 会把本窗口的激活抢走;
+    //   2) 关它只能靠 Deactivate, 可点 DropDown 自己不会让它失活, 旧弹层就
+    //      赖在屏幕上, 再点就是两个叠着;
+    //   3) 它不在本窗体的控件树里, 窗口移动/缩放/切主题时不会跟着走。
+    //  现在用鼠标捕获(Capture)接管: 打开后所有鼠标消息都进这里, 「点在框外」
+    //  就是关, 不依赖任何失去激活的时序。
+    // ================================================================
+    class PopupList : Control
+    {
+        public string[] Items = new string[0];
+        public int Sel = -1;
+        public int RowH = 26;
+        public int PageRows = 8;
+
+        public event Action<int> Committed;   // 选了第 i 项
+        public event Action Dismissed;        // 没选, 关掉
+
+        int hover = -1;
+        int top;                              // 第一个可见行的下标
+        bool closing;
+
+        public PopupList()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
+                     ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
+            BackColor = Theme.FieldBg;
+            Font = Fonts.UI;
+            TabStop = true;
+        }
+
+        /// <summary>显示: 拿焦点 + 抓鼠标。
+        /// 拿焦点才有键盘(↑↓/回车/Esc), 抓鼠标才知道"点到了框外"。</summary>
+        public void Open()
+        {
+            if (Sel >= PageRows) top = Sel - PageRows + 1;
+            if (top < 0) top = 0;
+            Focus();
+            Capture = true;
+            Invalidate();
+        }
+
+        void Finish(bool commit)
+        {
+            if (closing) return;
+            closing = true;
+            Capture = false;
+            if (commit) { var c = Committed; if (c != null && Sel >= 0) c(Sel); }
+            else { var d = Dismissed; if (d != null) d(); }
+        }
+
+        int IndexAt(Point p)
+        {
+            int pad = Theme.Px(4);
+            if (p.Y < pad) return -1;
+            int i = top + (p.Y - pad) / RowH;
+            return (i >= 0 && i < Items.Length) ? i : -1;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            base.OnMouseMove(e);
+            int i = IndexAt(e.Location);
+            if (i != hover) { hover = i; Invalidate(); }
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            int i = IndexAt(e.Location);
+            if (i >= 0) { Sel = i; Finish(true); }
+            else Finish(false);                  // 点在框外 = 关
+        }
+
+        protected override void OnMouseWheel(MouseEventArgs e)
+        {
+            base.OnMouseWheel(e);
+            if (Items.Length <= PageRows) return;
+            int t = top - Math.Sign(e.Delta);
+            if (t < 0) t = 0;
+            if (t > Items.Length - PageRows) t = Items.Length - PageRows;
+            top = t;
+            Invalidate();
+        }
+
+        protected override void OnMouseCaptureChanged(EventArgs e)
+        {
+            base.OnMouseCaptureChanged(e);
+            // 抓着的鼠标没了 = 用户点到别处去了(或窗口失活)
+            if (!Capture && !closing) Finish(false);
+        }
+
+        protected override bool IsInputKey(Keys v) { return true; }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (e.KeyCode == Keys.Escape) { e.Handled = true; Finish(false); return; }
+            if (e.KeyCode == Keys.Enter) { e.Handled = true; Finish(true); return; }
+            if (e.KeyCode != Keys.Up && e.KeyCode != Keys.Down) return;
+            e.Handled = true;
+            int n = Items.Length;
+            if (n == 0) return;
+            bool down = e.KeyCode == Keys.Down;
+            int i = Sel < 0 ? (down ? 0 : n - 1) : Sel + (down ? 1 : -1);
+            if (i < 0) i = 0;
+            if (i >= n) i = n - 1;
+            Sel = i;
+            if (Sel < top) top = Sel;
+            if (Sel >= top + PageRows) top = Sel - PageRows + 1;
+            hover = -1;
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.Clear(BackColor);
+            var rc = new Rectangle(0, 0, Width - 1, Height - 1);
+            using (var fill = new SolidBrush(Theme.FieldBg))
+            using (var pen = new Pen(Theme.InputBorder))
+            {
+                g.FillRectangle(fill, rc);
+                g.DrawRectangle(pen, rc);
+            }
+
+            int pad = Theme.Px(4);
+            int pool = Items.Length - top;
+            int shown = Math.Min(pool, (Height - pad * 2) / RowH);
+            for (int k = 0; k < shown; k++)
+            {
+                int idx = top + k;
+                var row = new Rectangle(Theme.Px(1), pad + k * RowH, Width - Theme.Px(2), RowH);
+                bool isSel = idx == Sel;
+                bool isHover = idx == hover;
+                if (isSel || isHover)
+                {
+                    using (var b = new SolidBrush(isSel ? Theme.AccentSoft : Theme.Hover))
+                        g.FillRectangle(b, row);
+                }
+                if (isSel)
+                {
+                    using (var b = new SolidBrush(Theme.Accent))
+                        g.FillRectangle(b, new Rectangle(row.X, row.Y, Theme.Px(2), row.Height));
+                }
+                var tr = new Rectangle(row.X + Theme.Px(9), row.Y, row.Width - Theme.Px(18), row.Height);
+                TextRenderer.DrawText(g, Items[idx], Font, tr,
+                    isSel ? Theme.Accent : Theme.Ink,
+                    TextFormatFlags.VerticalCenter | TextFormatFlags.Left |
+                    TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            }
+
+            // 还有更多项时, 右侧画一条很淡的滚动提示
+            if (Items.Length > PageRows)
+            {
+                int trackX = Width - Theme.Px(4);
+                int trackH = Height - pad * 2;
+                int barH = Math.Max(Theme.Px(16), trackH * PageRows / Items.Length);
+                int barY = pad + (trackH - barH) * top / Math.Max(1, Items.Length - PageRows);
+                using (var b = new SolidBrush(Color.FromArgb(60, Theme.InkFaint)))
+                    g.FillRectangle(b, new Rectangle(trackX, barY, Theme.Px(2), barH));
+            }
         }
     }
 
@@ -627,7 +813,7 @@ namespace Sicau
             BackColor = Theme.CardSolid;
             Font = Fonts.UI;
             Width = Theme.Px(width);
-            Height = Theme.Px(36);
+            Height = Theme.Px(32);
             Margin = Theme.Pad(0, 0, 10, 10);
             zoneW = Theme.Px(24);
 
@@ -789,7 +975,7 @@ namespace Sicau
             Font = Fonts.UI;
             AutoSize = true;
             AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            MinimumSize = new Size(Theme.Px(84), Theme.Px(36));
+            MinimumSize = new Size(Theme.Px(84), Theme.Px(32));
             Padding = Theme.Pad(16, 0, 16, 0);
             Margin = Theme.Pad(0, 0, 8, 0);
             Cursor = Cursors.Hand;

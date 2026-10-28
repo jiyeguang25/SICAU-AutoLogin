@@ -417,12 +417,14 @@ namespace Sicau
         Win11Button btnSave, btnAuth, btnHotOn, btnHotOff, btnHotStatus, btnOpen, btnClear, btnProbe;
         Win11Button btnInstall, btnUninstall, btnAbout, btnRepair;
         DropDown cboBand, cboTheme, cboBoot;
-        int modeIdx = 0;   // 连接方式: 0=有线, 1=无线。由「有线 / 无线」页签决定, 没有"自动"
-        Win11Button btnTabWired, btnTabWifi, btnTabHot;
-        TableLayoutPanel gridHost, grid;   // gridHost = 页签条 + 设置表;  grid = 三个页签共用的那张表
-        int tabIdx = 1;
+        // 连接方式: 0=自动, 1=仅有线, 2=仅无线。
+        // 中间有一版做成「有线 / 无线」两个页签, 那等于强迫二选一、没有"自动";
+        // 笔记本插着网线也可能走无线, 让人自己挑反而费事。改回一个下拉三选一。
+        int modeIdx = 0;
+        TableLayoutPanel gridHost, grid;   // gridHost 包住 grid;  grid = 设置表
         bool uiReady = false;
-        DropDown cboSsid;
+        DropDown cboSsid, cboMode;
+        Label lblSsid;                     // 「WiFi 名称」标签: 只有"仅无线"时才显示
         NotifyIcon tray;
         bool trayTipShown = false;
         bool reallyExit = false;
@@ -602,7 +604,7 @@ namespace Sicau
                 Dock = DockStyle.Fill,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Padding = Theme.Pad(16, 12, 16, 6),
+                Padding = Theme.Pad(14, 10, 14, 4),
                 Margin = Theme.Pad(0, 0, 0, 8)
             };
             gridHost = new TableLayoutPanel
@@ -611,12 +613,12 @@ namespace Sicau
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 1,
-                RowCount = 2,
+                RowCount = 1,
                 BackColor = Theme.CardSolid,
                 Margin = new Padding(0)
             };
             gridHost.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            for (int i = 0; i < 2; i++) gridHost.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            gridHost.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             txtUser = new InputBox(168);
             txtPass = new InputBox(168);
@@ -685,13 +687,19 @@ namespace Sicau
                 pnl.Controls.Add(lblLogKeepHint);
             });
 
-            // 连接方式不放下拉框: 上面的「有线 / 无线」页签就是连接方式(见 ShowTab / modeIdx)
+            // 连接方式: 一个下拉, 三选一(自动 / 仅有线 / 仅无线)。
+            // 「自动」是默认: 谁在线用谁, 具体挑哪个由 Core.ConcreteMode 在认证时决定。
+            cboMode = new DropDown(168);
+            cboMode.Items.AddRange(new object[] { "自动", "仅有线", "仅无线" });
+            cboMode.SelectedIndex = 0;
+            cboMode.SelectedIndexChanged += (s, e) => ApplyMode(cboMode.SelectedIndex);
+
             cboSsid = new DropDown(168);
             cboSsid.Editable = true;      // 扫到的只是候选, 也可以直接手打
             btnScan = new Win11Button
             {
                 Text = "扫描",
-                MinimumSize = new Size(Theme.Px(66), Theme.Px(36)),
+                MinimumSize = new Size(Theme.Px(66), Theme.Px(32)),
                 Padding = Theme.Pad(14, 0, 14, 0),
                 Margin = Theme.Pad(0, 0, 0, 10)
             };
@@ -707,21 +715,10 @@ namespace Sicau
             cboBand.Items.AddRange(new object[] { "自动", "仅 2.4GHz", "仅 5GHz" });
             cboBand.SelectedIndex = 0;
 
-            // ---- 页签条: 有线 / 无线 / 热点 ----
-            var tabStrip = Flow(pnl =>
-            {
-                pnl.BackColor = Theme.CardSolid;
-                pnl.Margin = Theme.Pad(0, 0, 0, 10);
-                btnTabWired = MkTab("有线", 0);
-                btnTabWifi = MkTab("无线", 1);
-                btnTabHot = MkTab("热点", 2);
-                pnl.Controls.Add(btnTabWired);
-                pnl.Controls.Add(btnTabWifi);
-                pnl.Controls.Add(btnTabHot);
-            });
-            gridHost.Controls.Add(tabStrip, 0, 0);
+            // ---- 设置表 ----
+            //  不再有页签条: 连接方式回到下拉, WiFi 名称跟着「仅无线」自动显隐,
+            //  热点那几行一直摆着(它们本来就是独立功能, 藏在页签里更难找)。
 
-            // ---- 设置表: 三个页签共用同一张表, 靠隐藏行切换 ----
             //  标签列用 AutoSize: 宽度由文字自己量出来, 高了 DPI/换了字体都不会把字切掉。
             //  (以前写死 72px, 125% 缩放下文字要 80px 才放得下, 于是「WiFi 名称」被挤成两行)
             grid = MakeGrid(6);
@@ -733,9 +730,17 @@ namespace Sicau
 
             PutRow(grid, 0, "学号", txtUser, "密码", pnlPass);
             PutRow(grid, 1, "检查周期", pnlInterval, "日志保留", pnlLogKeep);
-            PutRow(grid, 2, "WiFi 名称", pnlSsid, null, null);                        // 无线页
-            PutRow(grid, 3, "热点名称", txtHotspotSsid, "热点密码", txtHotspotPass);  // 热点页
-            PutRow(grid, 4, "热点频段", cboBand, null, null);                         // 热点页
+            // 连接方式 + WiFi 名称 挤在同一行: 只有选了「仅无线」才用得上名称
+            grid.Controls.Add(MakeLabel("连接方式"), 0, 2);
+            cboMode.Margin = Theme.Pad(0, 0, 28, 8);
+            grid.Controls.Add(cboMode, 1, 2);
+            lblSsid = MakeLabel("WiFi 名称");
+            grid.Controls.Add(lblSsid, 2, 2);
+            pnlSsid.Margin = Theme.Pad(0, 0, 0, 8);
+            grid.Controls.Add(pnlSsid, 3, 2);
+
+            PutRow(grid, 3, "热点名称", txtHotspotSsid, "热点密码", txtHotspotPass);
+            PutRow(grid, 4, "热点频段", cboBand, null, null);
             var pnlHotBtns = Flow(pnl =>
             {
                 pnl.BackColor = Theme.CardSolid;
@@ -749,7 +754,7 @@ namespace Sicau
             grid.Controls.Add(MakeLabel("热点操作"), 0, 5);
             grid.SetColumnSpan(pnlHotBtns, 3);
             grid.Controls.Add(pnlHotBtns, 1, 5);
-            gridHost.Controls.Add(grid, 0, 1);
+            gridHost.Controls.Add(grid, 0, 0);
 
             cardSettings.Controls.Add(gridHost);
             root.Controls.Add(cardSettings, 0, 1);
@@ -846,7 +851,7 @@ namespace Sicau
                 Dock = DockStyle.Fill,
                 Padding = Theme.Pad(14, 10, 14, 10),
                 Margin = Theme.Pad(0, 0, 0, 8),
-                MinimumSize = new Size(0, Theme.Px(110))
+                MinimumSize = new Size(0, Theme.Px(96))
             };
             txtLog = new TextBox
             {
@@ -1113,31 +1118,13 @@ namespace Sicau
             if (labelL != null)
             {
                 g.Controls.Add(MakeLabel(labelL), 0, row);
-                if (cL != null) { cL.Margin = Theme.Pad(0, 0, 28, 8); g.Controls.Add(cL, 1, row); }
+                if (cL != null) { cL.Margin = Theme.Pad(0, 0, 28, 6); g.Controls.Add(cL, 1, row); }
             }
             if (labelR != null)
             {
                 g.Controls.Add(MakeLabel(labelR), 2, row);
-                if (cR != null) { cR.Margin = Theme.Pad(0, 0, 0, 8); g.Controls.Add(cR, 3, row); }
+                if (cR != null) { cR.Margin = Theme.Pad(0, 0, 0, 6); g.Controls.Add(cR, 3, row); }
             }
-        }
-
-        Win11Button MkTab(string text, int idx)
-        {
-            // Segment 样式: 选中 = 淡强调底 + 强调字, 未选 = 透明。比实心主按钮更像页签,
-            // 也不会跟右边「保存并应用」那个实心按钮抢视线。
-            var b = new Win11Button
-            {
-                Text = text,
-                Segment = true,
-                Selected = (idx == 1),
-                MinimumSize = new Size(Theme.Px(80), Theme.Px(32)),
-                Padding = Theme.Pad(18, 0, 18, 0),
-                Height = Theme.Px(32)
-            };
-            b.Margin = Theme.Pad(0, 0, 6, 0);
-            b.Click += (s, e) => ShowTab(idx);
-            return b;
         }
 
         /// <summary>显示/隐藏表格里的一整行: 行里的控件和行高一起改, 藏起来的行不留空位。</summary>
@@ -1151,29 +1138,24 @@ namespace Sicau
             g.PerformLayout();
         }
 
-        /// <summary>切换页签。0=有线 1=无线 2=热点。</summary>
-        void ShowTab(int idx)
+        /// <summary>连接方式变化: 0=自动 1=仅有线 2=仅无线。
+        /// 只有「仅无线」需要填 WiFi 名称, 其余两种把它收起来(行里的其他格子不受影响)。</summary>
+        void ApplyMode(int idx)
         {
-            tabIdx = idx;
-            if (btnTabWired != null) { btnTabWired.Selected = (idx == 0); btnTabWired.Invalidate(); }
-            if (btnTabWifi != null) { btnTabWifi.Selected = (idx == 1); btnTabWifi.Invalidate(); }
-            if (btnTabHot != null) { btnTabHot.Selected = (idx == 2); btnTabHot.Invalidate(); }
-
-            ShowRow(grid, 2, idx == 1);                 // WiFi 名称: 只有无线页
-            ShowRow(grid, 3, idx == 2);                 // 热点名称/密码、频段、操作: 只有热点页
-            ShowRow(grid, 4, idx == 2);
-            ShowRow(grid, 5, idx == 2);
-
-            // 页签本身就决定了连接方式(没有"自动"): 0=有线, 1=无线; 热点页不改这个值
-            if (idx <= 1) modeIdx = idx;
-
+            if (idx < 0 || idx > 2) idx = 0;
+            modeIdx = idx;
+            bool needSsid = idx == 2;
+            if (lblSsid != null) lblSsid.Visible = needSsid;
+            if (cboSsid != null && cboSsid.Parent != null) cboSsid.Parent.Visible = needSsid;
             if (uiReady) AdaptSize();
         }
 
-        /// <summary>配置里的连接方式 -> 页签索引(0=有线, 1=无线)。老配置的 auto 由 Core.ConcreteMode 收敛。</summary>
-        static int GuessTab(string mode)
+        /// <summary>配置里的连接方式 -> 下拉索引。老配置的 auto 就是 0(自动)。</summary>
+        static int ModeIndex(string mode)
         {
-            return Core.ConcreteMode(mode) == "wired" ? 0 : 1;
+            if (string.Equals(mode, "wired", StringComparison.OrdinalIgnoreCase)) return 1;
+            if (string.Equals(mode, "wifi", StringComparison.OrdinalIgnoreCase)) return 2;
+            return 0;
         }
 
         Label MakeLabel(string text)
@@ -1202,6 +1184,9 @@ namespace Sicau
                 Padding = new Padding(0)
             };
             fill(p);
+            // 包在里面的控件默认带 3px 上下外边距, 会让整行比输入框高 6px —— 行距就白多一格。
+            foreach (Control k in p.Controls)
+                k.Margin = new Padding(k.Margin.Left, 0, k.Margin.Right, 0);
             return p;
         }
 
@@ -1250,14 +1235,25 @@ namespace Sicau
                             Math.Max(headerNeed,
                             Math.Max(cardSettings.PreferredSize.Width, cardChecks.PreferredSize.Width)))) + Theme.Px(40);
 
-                // 日志区固定预留一块, 其余各块按实际高度累加
-                int fixedH = header.PreferredSize.Height + cardSettings.PreferredSize.Height
-                           + cardChecks.PreferredSize.Height + pnlButtons.PreferredSize.Height
-                           + lblStatus.PreferredSize.Height + pnlBottom.PreferredSize.Height
-                           + tipLabel.PreferredSize.Height + root.Padding.Vertical + Theme.Px(130);   // 日志区最小高度
+                // 高度 = 每一行「自己要的高度 + 自己的下外边距」逐行加起来。
+                //
+                // 以前是手工把几个块的 PreferredSize.Height 相加, 漏了每块的 Margin.Vertical
+                // （PutRow 给每个控件 8 的下边距, 8 行就是 96px 的逻辑高度）。少算这 96px 的后果
+                // 不是「窗口小一点」, 而是 TableLayoutPanel 先按剩余空间给日志那行（Percent 100）
+                // 分了 63px, 而 cardLog 有 MinimumSize 144px, 控件被撑到 144 就直接压到下一行上
+                // —— 底部那排按钮（配置目录/清空日志/…）整个盖在日志文字上。
+                // 所以这里必须按行算, 不能漏 Margin。
+                int fixedH = root.Padding.Vertical + cardLog.MinimumSize.Height + cardLog.Margin.Vertical;
+                foreach (Control c in root.Controls)
+                {
+                    if (c == cardLog) continue;          // 它已经按下限算过了
+                    fixedH += c.PreferredSize.Height + c.Margin.Vertical;
+                }
 
-                // 宽高都按内容算, 不再只增不减
-                ClientSize = new Size(Math.Max(ClientSize.Width, needW), Math.Max(ClientSize.Height, fixedH));
+                // 宽高直接以内容为准。
+                // 以前写的是 Math.Max(现值, 需要值) —— 只会变胖不会变瘦, 于是删掉页签条之后
+                // 窗口还停在原来那个尺寸, 白留一大片空白。
+                ClientSize = new Size(Math.Max(needW, Theme.Px(520)), Math.Max(fixedH, Theme.Px(360)));
 
                 MinimumSize = new Size(Math.Max(Theme.Px(560), needW - Theme.Px(80)), Math.Min(fixedH, Theme.Px(560)));
 
@@ -1596,7 +1592,8 @@ namespace Sicau
             // 以系统实际状态为准(注册表里可能已经被别的地方改过), 配置只是记个意愿。
             chkQuietPortal.Checked = !Core.ProbeEnabled();
 
-            ShowTab(GuessTab(c.Mode));   // 有线/无线/热点 页签(顺带定下连接方式)
+            cboMode.SelectedIndex = ModeIndex(c.Mode);
+            ApplyMode(cboMode.SelectedIndex);   // 有线/自动 时把 WiFi 名称收起来
             cboBand.SelectedIndex = BandIndex(c.HotspotBand);
             cboTheme.SelectedIndex = ThemeIndex(c.Theme);
             cboBoot.SelectedIndex = BootIndex(c.BootMode);
@@ -1635,8 +1632,11 @@ namespace Sicau
 
         string SelectedMode()
         {
-            // 连接方式就是页签: 0=有线, 1=无线; 永远不会返回"auto"
-            return modeIdx == 1 ? "wifi" : "wired";
+            // 0=自动 1=仅有线 2=仅无线; "自动" 真的会存进配置,
+            // 认证时由 Core.ConcreteMode 按"哪块网卡有 IPv4"当场决定。
+            if (modeIdx == 1) return "wired";
+            if (modeIdx == 2) return "wifi";
+            return "auto";
         }
 
         string SelectedBand()
