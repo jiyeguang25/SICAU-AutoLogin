@@ -1,4 +1,4 @@
-﻿# =====================================================================
+# =====================================================================
 #  校园网自动认证 - Windows 版构建脚本
 #  用法: powershell -NoProfile -ExecutionPolicy Bypass -File build-win.ps1
 #  产物: <build>\SICAU-win-<版本>.exe                              编译+签名产物(发版用)
@@ -20,7 +20,7 @@
 # 注意同步改两处，否则"关于"里显示的和文件名会对不上：
 #   build\Core.cs              -> Core.AppVersion
 #   build\apk-src\AndroidManifest.xml -> versionName / versionCode（安卓每次发版必须 +1）
-$VER = '2.3'
+$VER = '2.4'
 # ------------------------------------------------------------------------
 
 $ErrorActionPreference = 'Stop'

@@ -1622,6 +1622,15 @@ namespace Sicau
                 menu.Items.Add("关热点", null, (s, e) => DoHotspot("off"));
                 menu.Items.Add("热点状态", null, (s, e) => { RestoreWindow(); DoHotspot("status"); });
                 menu.Items.Add(new ToolStripSeparator());
+                // 这一组是给「留在托盘监测」的同学的：他们根本不打开主界面，
+                // 而复制日志/打开目录/检查更新原来只在主界面里 —— 对他们等于不存在。
+                menu.Items.Add("复制日志", null, (s, e) => DoCopyLog());
+                menu.Items.Add("打开配置目录", null, (s, e) =>
+                {
+                    try { Process.Start("explorer.exe", "\"" + Core.Dir + "\""); } catch { }
+                });
+                menu.Items.Add("检查更新", null, (s, e) => TrayCheckUpdate());
+                menu.Items.Add(new ToolStripSeparator());
                 menu.Items.Add("退出", null, (s, e) => ExitApp());
                 tray.ContextMenuStrip = menu;
                 tray.DoubleClick += (s, e) => RestoreWindow();
@@ -1801,6 +1810,66 @@ namespace Sicau
                 SetStatus("日志已复制到剪贴板", Theme.Ok);
             }
             catch (Exception ex) { SetStatus("复制失败: " + ex.Message, Theme.Err); }
+        }
+
+        /// <summary>
+        /// 托盘菜单里的「检查更新」。
+        /// 为什么不复用「关于」里那个：那个把结果写在自己的对话框标签上，
+        /// 托盘入口没有那个对话框，得用主界面的状态栏 + 日志 + 一个结果提示说清楚。
+        /// 查成功就 MarkUpdateChecked()，免得启动时的静默检查再做一遍无用功。
+        /// </summary>
+        void TrayCheckUpdate()
+        {
+            SetStatus("正在检查更新…", Theme.InkDim);
+            AppendLog("手动检查更新…");
+            Task.Run(() =>
+            {
+                bool ok = false, newer = false;
+                string remote = "", url = Core.Update.ReleasesUrl, err = "";
+                try
+                {
+                    var info = Core.Update.Check();
+                    ok = info.Ok; newer = info.HasNewer;
+                    remote = info.RemoteVersion; url = info.Url; err = info.Error;
+                    if (ok) Core.MarkUpdateChecked();
+                }
+                catch (Exception ex) { err = ex.Message; }
+
+                try
+                {
+                    BeginInvoke(new Action(() =>
+                    {
+                        if (newer)
+                        {
+                            SetStatus("发现新版 " + remote, Theme.Ok);
+                            AppendLog("发现新版 " + remote + "（当前 " + Core.AppVersion + "）");
+                            if (MessageBox.Show(this,
+                                    "发现新版 " + remote + "，当前是 " + Core.AppVersion + "。\n\n是否打开下载页？",
+                                    "检查更新", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+                            {
+                                try { Process.Start(url); }
+                                catch (Exception ex) { MessageBox.Show(this, "打不开浏览器: " + ex.Message, "检查更新"); }
+                            }
+                        }
+                        else if (ok)
+                        {
+                            SetStatus("已是最新版 " + Core.AppVersion, Theme.Ok);
+                            AppendLog("已是最新版: " + Core.AppVersion);
+                            MessageBox.Show(this, "已是最新版（" + Core.AppVersion + "）。",
+                                "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
+                        else
+                        {
+                            SetStatus("检查更新失败", Theme.Warn);
+                            AppendLog("检查更新失败: " + err);
+                            MessageBox.Show(this,
+                                "检查更新失败：" + err + "\n\n也可以自己到下载页看看：\n" + Core.Update.ReleasesUrl,
+                                "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
+                    }));
+                }
+                catch { }
+            });
         }
 
         void SetStatus(string text, Color color)
