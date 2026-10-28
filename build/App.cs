@@ -416,6 +416,7 @@ namespace Sicau
         Label lblStatus, lblHint, lblLogKeepHint;
         Win11Button btnSave, btnAuth, btnHotOn, btnHotOff, btnHotStatus, btnOpen, btnClear, btnProbe;
         Win11Button btnInstall, btnUninstall, btnAbout, btnRepair;
+        ToolTip tips;      // 按钮名为了挤进一排被缩短了, 全名在这里
         DropDown cboBand, cboTheme, cboBoot;
         // 连接方式: 0=自动, 1=仅有线, 2=仅无线。
         // 中间有一版做成「有线 / 无线」两个页签, 那等于强迫二选一、没有"自动";
@@ -740,20 +741,24 @@ namespace Sicau
             grid.Controls.Add(pnlSsid, 3, 2);
 
             PutRow(grid, 3, "热点名称", txtHotspotSsid, "热点密码", txtHotspotPass);
-            PutRow(grid, 4, "热点频段", cboBand, null, null);
+            // 频段原本独占一行、右半边整片空白。这里把它和四个热点按钮并进同一行,
+            // 直接省掉一整行(48 逻辑像素)的高度。
             var pnlHotBtns = Flow(pnl =>
             {
                 pnl.BackColor = Theme.CardSolid;
+                pnl.Controls.Add(cboBand);
+                pnl.Controls.Add(Gap());
                 pnl.Controls.Add(btnHotOn = MkB("开热点", false, (s, e) => DoHotspot("on")));
                 pnl.Controls.Add(btnHotOff = MkB("关热点", false, (s, e) => DoHotspot("off")));
                 pnl.Controls.Add(btnHotStatus = MkB("热点状态", false, (s, e) => DoHotspot("status")));
                 pnl.Controls.Add(btnRepair = MkB("修复热点", false, (s, e) => DoRepairHotspot()));
             });
-            // 这一行横跨右边三列: 否则那一格被 4 个按钮撑宽, 整页(连窗口)会跟着变宽
+            // 这一行横跨右边三列: 否则那一格被按钮撑宽, 整页(连窗口)会跟着变宽
             pnlHotBtns.Margin = Theme.Pad(0, 0, 0, 4);
-            grid.Controls.Add(MakeLabel("热点操作"), 0, 5);
+            cboBand.Margin = Theme.Pad(0, 0, 4, 0);
+            grid.Controls.Add(MakeLabel("热点频段"), 0, 4);
             grid.SetColumnSpan(pnlHotBtns, 3);
-            grid.Controls.Add(pnlHotBtns, 1, 5);
+            grid.Controls.Add(pnlHotBtns, 1, 4);
             gridHost.Controls.Add(grid, 0, 0);
 
             cardSettings.Controls.Add(gridHost);
@@ -822,16 +827,36 @@ namespace Sicau
             cardChecks.Controls.Add(pnlChecks);
             root.Controls.Add(cardChecks, 0, 2);
 
-            // ---------------- 功能按钮 ----------------
+            // ---------------- 功能按钮 + 工具按钮: 排成一排 ----------------
+            // 原来是上下两排(功能一排、配置目录/卸载/关于再一排), 白白多占一行高度。
+            // 用户要求「一排能放下的就放一排」。8 个按钮在 150% 缩放下总宽约 1.0k 设备像素,
+            // 放得进当前卡片宽度, 于是合成一排, 中间用一个细竖线隔开"主操作/维护"。
             pnlButtons = Flow(pnl =>
             {
                 pnl.BackColor = Theme.CardSolid;
                 pnl.Margin = Theme.Pad(2, 0, 0, 8);
-                pnl.Controls.Add(btnSave = MkB("保存并应用", true, (s, e) => DoSave()));
-                pnl.Controls.Add(btnAuth = MkB("立即认证", false, (s, e) => DoAuthAsync(false)));
-                pnl.Controls.Add(btnProbe = MkB("检测状态", false, (s, e) => DoProbeAsync()));
+                pnl.Controls.Add(btnSave = MkB("保存", true, (s, e) => DoSave()));
+                pnl.Controls.Add(btnAuth = MkB("认证", false, (s, e) => DoAuthAsync(false)));
+                pnl.Controls.Add(btnProbe = MkB("检测", false, (s, e) => DoProbeAsync()));
+                pnl.Controls.Add(Gap());
+                pnl.Controls.Add(btnOpen = MkB("目录", false, (s, e) => { try { Process.Start("explorer.exe", "\"" + Core.Dir + "\""); } catch { } }));
+                pnl.Controls.Add(btnClear = MkB("清空", false, (s, e) => txtLog.Clear()));
+                pnl.Controls.Add(btnInstall = MkB("换目录", false, (s, e) => DoInstallTo()));
+                pnl.Controls.Add(btnUninstall = MkB("卸载", false, (s, e) => DoUninstall()));
+                pnl.Controls.Add(btnAbout = MkB("关于", false, (s, e) => ShowAbout()));
             });
             root.Controls.Add(pnlButtons, 0, 3);
+
+            // 缩成两三个字是为了挤进一排, 全名放 tooltip, 鼠标停一下就看得见。
+            tips = new ToolTip { InitialDelay = 350, ReshowDelay = 100, AutoPopDelay = 8000 };
+            tips.SetToolTip(btnSave, "保存设置并立即应用");
+            tips.SetToolTip(btnAuth, "立即认证一次");
+            tips.SetToolTip(btnProbe, "检测当前连接状态");
+            tips.SetToolTip(btnOpen, "打开配置和日志所在目录");
+            tips.SetToolTip(btnClear, "清空日志显示");
+            tips.SetToolTip(btnInstall, "安装到其他目录");
+            tips.SetToolTip(btnUninstall, "卸载开机自启与安装");
+            tips.SetToolTip(btnAbout, "关于 SICAU-AutoLogin");
 
             // ---------------- 状态 ----------------
             lblStatus = new Label
@@ -851,7 +876,7 @@ namespace Sicau
                 Dock = DockStyle.Fill,
                 Padding = Theme.Pad(14, 10, 14, 10),
                 Margin = Theme.Pad(0, 0, 0, 8),
-                MinimumSize = new Size(0, Theme.Px(96))
+                MinimumSize = new Size(0, Theme.Px(80))
             };
             txtLog = new TextBox
             {
@@ -869,17 +894,9 @@ namespace Sicau
             root.Controls.Add(cardLog, 0, 5);
 
             // ---------------- 底部 ----------------
-            pnlBottom = Flow(pnl =>
-            {
-                pnl.BackColor = Theme.CardSolid;
-                pnl.Margin = Theme.Pad(2, 0, 0, 0);
-                pnl.Controls.Add(btnOpen = MkB("配置目录", false, (s, e) => { try { Process.Start("explorer.exe", "\"" + Core.Dir + "\""); } catch { } }));
-                pnl.Controls.Add(btnClear = MkB("清空日志", false, (s, e) => txtLog.Clear()));
-                pnl.Controls.Add(btnInstall = MkB("安装到其他目录", false, (s, e) => DoInstallTo()));
-                pnl.Controls.Add(btnUninstall = MkB("卸载", false, (s, e) => DoUninstall()));
-                pnl.Controls.Add(btnAbout = MkB("关于", false, (s, e) => ShowAbout()));
-            });
-            root.Controls.Add(pnlBottom, 0, 6);
+            // 这五个按钮已经并到上面那一排了(见 pnlButtons), 这里只留一个空壳占住字段,
+            // 免得 AdaptSize 里引用 pnlBottom 的地方要改; 它不进 root, 不占高度。
+            pnlBottom = new FlowLayoutPanel { AutoSize = true, Margin = new Padding(0), Padding = new Padding(0) };
 
             tipLabel = new Label
             {
@@ -970,6 +987,35 @@ namespace Sicau
             var b = new Win11Button { Text = text, Primary = primary };
             b.Click += onClick;
             return b;
+        }
+
+        /// <summary>按钮排里的一条细竖线: 把「主操作」和「维护类」隔开。
+        /// 不用普通 Panel 是因为它的 BackColor 不能带 alpha（会抛"控件不支持透明的背景色"），
+        /// 而主题里的分隔色都是带 alpha 的, 所以自己画一条线。</summary>
+        static Control Gap()
+        {
+            return new Divider
+            {
+                Size = new Size(Theme.Px(1), Theme.Px(20)),
+                Margin = Theme.Pad(7, 14, 7, 0)
+            };
+        }
+
+        sealed class Divider : Control
+        {
+            public Divider()
+            {
+                SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
+                         ControlStyles.OptimizedDoubleBuffer, true);
+                BackColor = Theme.CardSolid;     // 必须是不透明实色
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                e.Graphics.Clear(BackColor);
+                using (var p = new Pen(Theme.InputBorder, Math.Max(1f, Theme.Scale)))
+                    e.Graphics.DrawLine(p, Width / 2f, 0, Width / 2f, Height);
+            }
         }
 
         string SelectedTheme()

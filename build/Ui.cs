@@ -528,7 +528,18 @@ namespace Sicau
         {
             base.OnMouseDown(e);
             Focus();
-            OpenPopup();
+            // 这里**不能**开弹层。Control.WmMouseDown 处理完 OnMouseDown 之后会把
+            // Capture 设回本控件(鼠标按下期间框架要抓鼠标), 而弹层在 Open() 里刚把
+            // Capture 抢走 —— 于是弹层立刻收到「捕获丢失」→ OnMouseCaptureChanged
+            // 判定成「点到框外」→ 当场关掉。用户看到的就是「点了完全没反应」。
+            // 改成等 MouseUp（键已松开、Capture 记账结束）再开。
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            if (open) DropPopup();          // 再点一下同一个下拉 = 收起
+            else OpenPopup();
         }
 
         protected override void OnGotFocus(EventArgs e) { focused = true; Invalidate(); base.OnGotFocus(e); }
@@ -646,6 +657,7 @@ namespace Sicau
         int hover = -1;
         int top;                              // 第一个可见行的下标
         bool closing;
+        DateTime openedAt;                    // 刚打开的一小段时间内不把"捕获丢失"当点外框
 
         public PopupList()
         {
@@ -663,8 +675,15 @@ namespace Sicau
             if (Sel >= PageRows) top = Sel - PageRows + 1;
             if (top < 0) top = 0;
             Focus();
-            Capture = true;
+            openedAt = DateTime.Now;
             Invalidate();
+            // 抓鼠标要推到这条鼠标消息处理完之后再做（BeginInvoke 排队到下一次消息循环）。
+            // 同步抢 Capture 会被框架随后的记账抢回去, 弹层立刻自我关闭。
+            BeginInvoke((Action)delegate
+            {
+                if (IsDisposed || closing) return;
+                Capture = true;
+            });
         }
 
         void Finish(bool commit)
@@ -713,8 +732,10 @@ namespace Sicau
         protected override void OnMouseCaptureChanged(EventArgs e)
         {
             base.OnMouseCaptureChanged(e);
-            // 抓着的鼠标没了 = 用户点到别处去了(或窗口失活)
-            if (!Capture && !closing) Finish(false);
+            // 抓着的鼠标没了 = 用户点到别处去了(或窗口失活)。
+            // 刚打开的这一两百毫秒内不算: 那时 Capture 还在排队设置, 中间的丢失是记账噪声,
+            // 把它当"点到框外"就会一点就没了。
+            if (!Capture && !closing && (DateTime.Now - openedAt).TotalMilliseconds > 250) Finish(false);
         }
 
         protected override bool IsInputKey(Keys v) { return true; }
@@ -975,8 +996,10 @@ namespace Sicau
             Font = Fonts.UI;
             AutoSize = true;
             AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            MinimumSize = new Size(Theme.Px(84), Theme.Px(32));
-            Padding = Theme.Pad(16, 0, 16, 0);
+            // 8 个按钮要挤进一排, 单个按钮的内边距和最小宽度都得收一点:
+            // 原来 Px(16) 左右内边距 + Px(84) 最小宽, 8 个排下来 1214 设备像素, 窗口被迫变宽。
+            MinimumSize = new Size(Theme.Px(72), Theme.Px(32));
+            Padding = Theme.Pad(13, 0, 13, 0);
             Margin = Theme.Pad(0, 0, 8, 0);
             Cursor = Cursors.Hand;
             UseVisualStyleBackColor = false;
