@@ -264,11 +264,16 @@ namespace Sicau
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                      ControlStyles.UserPaint | ControlStyles.ResizeRedraw |
                      ControlStyles.SupportsTransparentBackColor, true);
-            BackColor = Color.Transparent;
+            // 卡片不给透明底: 圆角外露出来的部分直接是父级实色(窗口底), 既保住圆角,
+            BackColor = Theme.Bg;
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
+            // 先把整块客户端填成不透明的 BackColor 再画。
+            // 双缓冲的位图初始 alpha 全是 0, GDI 画文字时看到的是「透明底」,
+            // ClearType 会画出黑边甚至糊成一团(2026-10-28 实测: 未选中的页签就是这样糊的)。
+            e.Graphics.Clear(BackColor);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             var r = new Rectangle(0, 0, Width - 1, Height - 1);
             if (r.Width <= 0 || r.Height <= 0) return;
@@ -372,7 +377,7 @@ namespace Sicau
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                      ControlStyles.UserPaint | ControlStyles.ResizeRedraw |
                      ControlStyles.SupportsTransparentBackColor, true);
-            BackColor = Color.Transparent;
+            BackColor = Theme.CardSolid;
             Font = Fonts.UI;
             Width = Theme.Px(width);
             Height = Theme.Px(36);
@@ -453,6 +458,10 @@ namespace Sicau
 
         protected override void OnPaint(PaintEventArgs e)
         {
+            // 先把整块客户端填成不透明的 BackColor 再画。
+            // 双缓冲的位图初始 alpha 全是 0, GDI 画文字时看到的是「透明底」,
+            // ClearType 会画出黑边甚至糊成一团(2026-10-28 实测: 未选中的页签就是这样糊的)。
+            e.Graphics.Clear(BackColor);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             var r = new Rectangle(0, 0, Width - 1, Height - 1);
             using (var path = Theme.RoundRect(r, Theme.RField))
@@ -615,7 +624,7 @@ namespace Sicau
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                      ControlStyles.UserPaint | ControlStyles.ResizeRedraw |
                      ControlStyles.SupportsTransparentBackColor, true);
-            BackColor = Color.Transparent;
+            BackColor = Theme.CardSolid;
             Font = Fonts.UI;
             Width = Theme.Px(width);
             Height = Theme.Px(36);
@@ -672,6 +681,10 @@ namespace Sicau
 
         protected override void OnPaint(PaintEventArgs e)
         {
+            // 先把整块客户端填成不透明的 BackColor 再画。
+            // 双缓冲的位图初始 alpha 全是 0, GDI 画文字时看到的是「透明底」,
+            // ClearType 会画出黑边甚至糊成一团(2026-10-28 实测: 未选中的页签就是这样糊的)。
+            e.Graphics.Clear(BackColor);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             var r = new Rectangle(0, 0, Width - 1, Height - 1);
             using (var path = Theme.RoundRect(r, Theme.RField))
@@ -770,7 +783,7 @@ namespace Sicau
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                      ControlStyles.UserPaint | ControlStyles.ResizeRedraw |
                      ControlStyles.SupportsTransparentBackColor, true);
-            BackColor = Color.Transparent;
+            BackColor = Theme.CardSolid;
             FlatStyle = FlatStyle.Flat;
             FlatAppearance.BorderSize = 0;
             Font = Fonts.UI;
@@ -790,6 +803,10 @@ namespace Sicau
 
         protected override void OnPaint(PaintEventArgs e)
         {
+            // 先把整块客户端填成不透明的 BackColor 再画。
+            // 双缓冲的位图初始 alpha 全是 0, GDI 画文字时看到的是「透明底」,
+            // ClearType 会画出黑边甚至糊成一团(2026-10-28 实测: 未选中的页签就是这样糊的)。
+            e.Graphics.Clear(BackColor);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
             Color fill, line, ink;

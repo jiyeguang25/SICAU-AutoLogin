@@ -513,7 +513,7 @@ namespace Sicau
                 ColumnCount = 1,
                 RowCount = 8,
                 Padding = Theme.Pad(18, 14, 18, 12),
-                BackColor = Color.Transparent
+                BackColor = Theme.CardSolid
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             for (int i = 0; i < 5; i++) root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -542,7 +542,7 @@ namespace Sicau
                 Dock = DockStyle.Fill,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                BackColor = Color.Transparent,
+                BackColor = Theme.CardSolid,
                 Margin = Theme.Pad(2, 2, 0, 16)
             };
 
@@ -552,7 +552,7 @@ namespace Sicau
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 1,
                 RowCount = 2,
-                BackColor = Color.Transparent,
+                BackColor = Theme.CardSolid,
                 Margin = new Padding(0)
             };
             titleBox.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -563,7 +563,7 @@ namespace Sicau
                 Text = "校园网自动认证",
                 Font = Fonts.Title,
                 ForeColor = Theme.Ink,
-                BackColor = Color.Transparent,
+                BackColor = Theme.CardSolid,
                 AutoSize = true,
                 Margin = new Padding(0, 0, 0, 3)
             }, 0, 0);
@@ -571,7 +571,7 @@ namespace Sicau
             {
                 Text = Sicau.Site.PortalHost + " · 开机自动登录",
                 ForeColor = Theme.InkDim,
-                BackColor = Color.Transparent,
+                BackColor = Theme.CardSolid,
                 AutoSize = true,
                 Tag = "dim",
                 Margin = new Padding(1, 0, 0, 0)
@@ -581,7 +581,7 @@ namespace Sicau
 
             headerSettings = Flow(pnl =>
             {
-                pnl.BackColor = Color.Transparent;
+                pnl.BackColor = Theme.CardSolid;
                 pnl.Controls.Add(HeaderField("界面主题", cboTheme));
                 pnl.Controls.Add(HeaderField("认证成功后", cboBoot));
             });
@@ -612,7 +612,7 @@ namespace Sicau
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 1,
                 RowCount = 2,
-                BackColor = Color.Transparent,
+                BackColor = Theme.CardSolid,
                 Margin = new Padding(0)
             };
             gridHost.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -632,7 +632,7 @@ namespace Sicau
                 AutoSize = true,
                 Font = Fonts.UI,
                 ForeColor = Theme.Ink,
-                BackColor = Color.Transparent,
+                BackColor = Theme.CardSolid,
                 Anchor = AnchorStyles.Left,
                 Margin = new Padding(0)
             };
@@ -640,7 +640,7 @@ namespace Sicau
 
             var pnlPass = Flow(pnl =>
             {
-                pnl.BackColor = Color.Transparent;
+                pnl.BackColor = Theme.CardSolid;
                 pnl.Controls.Add(txtPass);
             });
 
@@ -653,7 +653,7 @@ namespace Sicau
                 Tag = "dim",
                 Text = "分钟（0 = 不复检）",
                 ForeColor = Theme.InkDim,
-                BackColor = Color.Transparent,
+                BackColor = Theme.CardSolid,
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
                 Margin = Theme.Pad(0, 0, 0, 10)
@@ -667,20 +667,20 @@ namespace Sicau
                 Tag = "dim",
                 Text = "小时（0 = 不自动删）",
                 ForeColor = Theme.InkDim,
-                BackColor = Color.Transparent,
+                BackColor = Theme.CardSolid,
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
                 Margin = Theme.Pad(0, 0, 0, 10)
             };
             var pnlInterval = Flow(pnl =>
             {
-                pnl.BackColor = Color.Transparent;
+                pnl.BackColor = Theme.CardSolid;
                 pnl.Controls.Add(numInterval);
                 pnl.Controls.Add(lblHint);
             });
             var pnlLogKeep = Flow(pnl =>
             {
-                pnl.BackColor = Color.Transparent;
+                pnl.BackColor = Theme.CardSolid;
                 pnl.Controls.Add(numLogKeep);
                 pnl.Controls.Add(lblLogKeepHint);
             });
@@ -698,7 +698,7 @@ namespace Sicau
             btnScan.Click += (s, e) => ScanWifiAsync();
             var pnlSsid = Flow(pnl =>
             {
-                pnl.BackColor = Color.Transparent;
+                pnl.BackColor = Theme.CardSolid;
                 pnl.Controls.Add(cboSsid);
                 pnl.Controls.Add(btnScan);
             });
@@ -710,7 +710,7 @@ namespace Sicau
             // ---- 页签条: 有线 / 无线 / 热点 ----
             var tabStrip = Flow(pnl =>
             {
-                pnl.BackColor = Color.Transparent;
+                pnl.BackColor = Theme.CardSolid;
                 pnl.Margin = Theme.Pad(0, 0, 0, 10);
                 btnTabWired = MkTab("有线", 0);
                 btnTabWifi = MkTab("无线", 1);
@@ -738,7 +738,7 @@ namespace Sicau
             PutRow(grid, 4, "热点频段", cboBand, null, null);                         // 热点页
             var pnlHotBtns = Flow(pnl =>
             {
-                pnl.BackColor = Color.Transparent;
+                pnl.BackColor = Theme.CardSolid;
                 pnl.Controls.Add(btnHotOn = MkB("开热点", false, (s, e) => DoHotspot("on")));
                 pnl.Controls.Add(btnHotOff = MkB("关热点", false, (s, e) => DoHotspot("off")));
                 pnl.Controls.Add(btnHotStatus = MkB("热点状态", false, (s, e) => DoHotspot("status")));
@@ -769,7 +769,7 @@ namespace Sicau
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 2,
                 RowCount = 2,
-                BackColor = Color.Transparent,
+                BackColor = Theme.CardSolid,
                 Margin = new Padding(0)
             };
             pnlChecks.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
@@ -784,7 +784,7 @@ namespace Sicau
                 Checked = true,
                 Font = Fonts.UI,
                 ForeColor = Theme.Ink,
-                BackColor = Color.Transparent,
+                BackColor = Theme.CardSolid,
                 Anchor = AnchorStyles.Left,
                 Margin = Theme.Pad(0, 0, 0, 6)
             };
@@ -794,7 +794,7 @@ namespace Sicau
                 AutoSize = true,
                 Font = Fonts.UI,
                 ForeColor = Theme.Ink,
-                BackColor = Color.Transparent,
+                BackColor = Theme.CardSolid,
                 Anchor = AnchorStyles.Left,
                 Margin = Theme.Pad(0, 0, 0, 6)
             };
@@ -804,7 +804,7 @@ namespace Sicau
                 AutoSize = true,
                 Font = Fonts.UI,
                 ForeColor = Theme.Ink,
-                BackColor = Color.Transparent,
+                BackColor = Theme.CardSolid,
                 Anchor = AnchorStyles.Left,
                 Margin = new Padding(0)
             };
@@ -820,7 +820,7 @@ namespace Sicau
             // ---------------- 功能按钮 ----------------
             pnlButtons = Flow(pnl =>
             {
-                pnl.BackColor = Color.Transparent;
+                pnl.BackColor = Theme.CardSolid;
                 pnl.Margin = Theme.Pad(2, 0, 0, 8);
                 pnl.Controls.Add(btnSave = MkB("保存并应用", true, (s, e) => DoSave()));
                 pnl.Controls.Add(btnAuth = MkB("立即认证", false, (s, e) => DoAuthAsync(false)));
@@ -834,7 +834,7 @@ namespace Sicau
                 Text = "●  就绪",
                 Font = Fonts.Status,
                 ForeColor = Theme.InkDim,
-                BackColor = Color.Transparent,
+                BackColor = Theme.CardSolid,
                 AutoSize = true,
                 Margin = Theme.Pad(2, 0, 0, 8)
             };
@@ -866,7 +866,7 @@ namespace Sicau
             // ---------------- 底部 ----------------
             pnlBottom = Flow(pnl =>
             {
-                pnl.BackColor = Color.Transparent;
+                pnl.BackColor = Theme.CardSolid;
                 pnl.Margin = Theme.Pad(2, 0, 0, 0);
                 pnl.Controls.Add(btnOpen = MkB("配置目录", false, (s, e) => { try { Process.Start("explorer.exe", "\"" + Core.Dir + "\""); } catch { } }));
                 pnl.Controls.Add(btnClear = MkB("清空日志", false, (s, e) => txtLog.Clear()));
@@ -881,7 +881,7 @@ namespace Sicau
                 Tag = "dim",
                 Text = "配置和日志保存在 " + Core.Dir,
                 ForeColor = Theme.InkDim,
-                BackColor = Color.Transparent,
+                BackColor = Theme.CardSolid,
                 AutoSize = true,
                 Margin = Theme.Pad(2, 4, 0, 0)
             };
@@ -939,7 +939,7 @@ namespace Sicau
             box.Margin = new Padding(0);
             return Flow(pnl =>
             {
-                pnl.BackColor = Color.Transparent;
+                pnl.BackColor = Theme.CardSolid;
                 pnl.Margin = Theme.Pad(14, 0, 0, 0);
                 // 标签用固定高度 + 垂直居中: 居中要跟下拉框真正对齐,
                 // 靠 Margin 凑(top=7) 在不同字体大小下会歪
@@ -947,7 +947,7 @@ namespace Sicau
                 {
                     Text = label,
                     ForeColor = Theme.InkDim,
-                    BackColor = Color.Transparent,
+                    BackColor = Theme.CardSolid,
                     AutoSize = false,
                     Height = box.Height,
                     Width = TextRenderer.MeasureText(label, Fonts.UI).Width + Theme.Px(2),
@@ -1048,11 +1048,11 @@ namespace Sicau
                 }
                 else if (cp != null)
                 {
-                    // 卡片本身保持透明: 底下的窗口渐变要透上来, 填成实色就没有玻璃感了
-                    cp.BackColor = Color.Transparent;
-                    cp.Fill = Theme.Card;
+                    // 卡片底 = 父级实色(圆角外就是父级色), 填充用不透明的 CardSolid。
+                    cp.BackColor = surface;
+                    cp.Fill = Theme.CardSolid;
                     cp.Line = Theme.CardBorder;
-                    childSurface = Theme.Card;
+                    childSurface = Theme.CardSolid;
                 }
                 else if (dd != null)
                 {
@@ -1074,7 +1074,10 @@ namespace Sicau
                 }
                 else
                 {
-                    c.BackColor = Color.Transparent;
+                    // 普通控件(面板/文字/复选框)一律用父级实色打底: 不再出现「透明控件」。
+                    // WinForms 的透明子控件会要求父级先把自己重绘一遍再贴上来, 嵌套几层之后
+                    // 在真实消息循环里会错位 —— 页签/按钮上叠出别的控件的文字(2026-10-28 实测)。
+                    c.BackColor = surface;
                     if (c is Label || c is CheckBox)
                         c.ForeColor = ("dim".Equals(c.Tag)) ? Theme.InkDim : Theme.Ink;
                 }
@@ -1096,7 +1099,7 @@ namespace Sicau
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 ColumnCount = 4,
                 RowCount = rows,
-                BackColor = Color.Transparent,
+                BackColor = Theme.CardSolid,
                 Margin = new Padding(0)
             };
             for (int i = 0; i < 4; i++) g.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -1182,7 +1185,7 @@ namespace Sicau
                 Anchor = AnchorStyles.Left,
                 Font = Fonts.UI,
                 ForeColor = Theme.Ink,
-                BackColor = Color.Transparent,
+                BackColor = Theme.CardSolid,
                 Margin = Theme.Pad(0, 0, 12, 8)
             };
         }
