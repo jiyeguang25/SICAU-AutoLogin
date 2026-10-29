@@ -347,7 +347,7 @@ namespace Sicau
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Dock = DockStyle.Fill,
-                Padding = new Padding(26, 22, 26, 20),
+                Padding = Theme.Pad(26, 22, 26, 20),
                 BackColor = Theme.Bg
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -361,7 +361,7 @@ namespace Sicau
                 ForeColor = Theme.Ink,
                 BackColor = Theme.Bg,
                 AutoSize = true,
-                Margin = new Padding(0, 0, 0, 14)
+                Margin = Theme.Pad(0, 0, 0, 14)
             }, 0, 0);
 
             // ---- 结果卡片 ----
@@ -369,8 +369,8 @@ namespace Sicau
             {
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Padding = new Padding(22, 18, 22, 18),
-                Margin = new Padding(0, 0, 0, 14)
+                Padding = Theme.Pad(22, 18, 22, 18),
+                Margin = Theme.Pad(0, 0, 0, 14)
             };
             var body = new TableLayoutPanel
             {
@@ -391,7 +391,7 @@ namespace Sicau
                 ForeColor = dot,
                 BackColor = Theme.CardSolid,
                 AutoSize = true,
-                Margin = new Padding(0, 0, 0, 8)
+                Margin = Theme.Pad(0, 0, 0, 8)
             }, 0, 0);
             body.Controls.Add(new Label
             {
@@ -399,8 +399,8 @@ namespace Sicau
                 ForeColor = Theme.Ink,
                 BackColor = Theme.CardSolid,
                 AutoSize = true,
-                MaximumSize = new Size(400, 0),
-                Margin = new Padding(0, 0, 0, 8)
+                MaximumSize = new Size(Theme.Px(400), 0),
+                Margin = Theme.Pad(0, 0, 0, 8)
             }, 0, 1);
             body.Controls.Add(new Label
             {
@@ -417,8 +417,8 @@ namespace Sicau
 
             // ---- 按钮 ----
             // 这个窗口只在"开机认证没成功"时才出现, 所以主按钮是"打开主界面去处理"
-            var btnTray = new Win11Button { Text = "打开主界面", Primary = true, MinimumSize = new Size(120, 36) };
-            var btnExit = new Win11Button { Text = "退出程序", MinimumSize = new Size(110, 36) };
+            var btnTray = new Win11Button { Text = "打开主界面", Primary = true, MinimumSize = new Size(Theme.Px(120), Theme.Px(32)) };
+            var btnExit = new Win11Button { Text = "退出程序", MinimumSize = new Size(Theme.Px(110), Theme.Px(32)) };
             btnExit.Click += (s, e) => { StayInTray = false; DialogResult = DialogResult.OK; Close(); };
             btnTray.Click += (s, e) => { StayInTray = true; DialogResult = DialogResult.OK; Close(); };
 
@@ -464,6 +464,9 @@ namespace Sicau
         CheckBox chkAutostart, chkAutoHotspot, chkQuietPortal, chkShow;
         Stepper numInterval, numLogKeep;
         Label lblStatus, lblHint, lblLogKeepHint;
+        /// <summary>日志为空时盖在日志框上的灰提示。是独立 Label、**不写进 txtLog**，
+        /// 否则会被「复制」带走、被滚动、还会被当成一条日志。</summary>
+        Label lblLogEmpty;
         Win11Button btnSave, btnAuth, btnHotOn, btnHotOff, btnHotStatus, btnOpen, btnClear, btnProbe;
         Win11Button btnInstall, btnUninstall, btnAbout, btnRepair, btnCopyLog;
         ToolTip tips;      // 按钮名为了挤进一排被缩短了, 全名在这里
@@ -501,7 +504,6 @@ namespace Sicau
             Core.OnLog += AppendLog;
             LoadToUi();
             AppendLog("SICAU-AutoLogin 启动");
-            AppendLog("配置目录: " + Core.Dir);
             SetStatus("就绪", Theme.InkDim);
 
             // 配置里如果记着"不要自动弹登录页", 启动时尽量把它落到位
@@ -521,9 +523,7 @@ namespace Sicau
         // ================================================================
         const int BaseW = 700;
         const int BaseH = 620;
-        bool dpiApplied = false;
         Label tipLabel;
-        Control[] bottomRow;
 
         // ================================================================
         //  界面: 全部用 TableLayoutPanel + AutoSize 自动排版。
@@ -543,7 +543,6 @@ namespace Sicau
         TableLayoutPanel titleBox;      // 标题栏左边那块(名称 + 副标题)
         FlowLayoutPanel headerSettings; // 标题栏右边那两个下拉框
         Win11Button btnScan;
-        int gridRows = 0;
 
         void BuildUi()
         {
@@ -618,7 +617,7 @@ namespace Sicau
                 ForeColor = Theme.Ink,
                 BackColor = Theme.CardSolid,
                 AutoSize = true,
-                Margin = new Padding(0, 0, 0, 3)
+                Margin = Theme.Pad(0, 0, 0, 3)
             }, 0, 0);
             titleBox.Controls.Add(new Label
             {
@@ -627,7 +626,7 @@ namespace Sicau
                 BackColor = Theme.CardSolid,
                 AutoSize = true,
                 Tag = "dim",
-                Margin = new Padding(1, 0, 0, 0)
+                Margin = Theme.Pad(1, 0, 0, 0)
             }, 0, 1);
             titleBox.Location = new Point(0, 0);
             header.Controls.Add(titleBox);
@@ -691,11 +690,10 @@ namespace Sicau
             };
             chkShow.CheckedChanged += (s, e) => txtPass.Inner.UseSystemPasswordChar = !chkShow.Checked;
 
-            var pnlPass = Flow(pnl =>
-            {
-                pnl.BackColor = Theme.CardSolid;
-                pnl.Controls.Add(txtPass);
-            });
+            // 密码框不再套一层 Flow 壳：壳是 AutoSize 的，宽度永远是输入框自己的 168，
+            // 于是「学号框右沿 → 密码标签」之间留 125px 死区。直接放进网格才能跟着列宽铺满。
+            Stretch(txtUser);
+            Stretch(txtPass);
 
             numInterval = new Stepper(100);
             numInterval.Minimum = 0;
@@ -779,11 +777,12 @@ namespace Sicau
             //  交给 AutoSize 让它自己长, 窗口宽度再由 AdaptSize 统一收。
             for (int i = 0; i < 4; i++) grid.ColumnStyles[i] = new ColumnStyle(SizeType.AutoSize);
 
-            PutRow(grid, 0, "学号", txtUser, "密码", pnlPass);
+            PutRow(grid, 0, "学号", txtUser, "密码", txtPass);
             PutRow(grid, 1, "检查周期", pnlInterval, "日志保留", pnlLogKeep);
             // 连接方式 + WiFi 名称 挤在同一行: 只有选了「仅无线」才用得上名称
             grid.Controls.Add(MakeLabel("连接方式"), 0, 2);
             cboMode.Margin = Theme.Pad(0, 0, 28, 8);
+            Stretch(cboMode);
             grid.Controls.Add(cboMode, 1, 2);
             lblSsid = MakeLabel("WiFi 名称");
             grid.Controls.Add(lblSsid, 2, 2);
@@ -892,17 +891,18 @@ namespace Sicau
             {
                 pnl.BackColor = Theme.CardSolid;
                 pnl.Margin = Theme.Pad(2, 0, 0, 8);
-                pnl.Controls.Add(btnSave = MkB("保存", true, (s, e) => DoSave()));
-                pnl.Controls.Add(btnAuth = MkB("认证", false, (s, e) => DoAuthAsync(false)));
+                pnl.Controls.Add(btnSave = MkB("保存", false, (s, e) => DoSave()));
+                pnl.Controls.Add(btnAuth = MkB("认证", true, (s, e) => DoAuthAsync(false)));
                 pnl.Controls.Add(btnProbe = MkB("检测", false, (s, e) => DoProbeAsync()));
                 pnl.Controls.Add(Gap());
                 pnl.Controls.Add(btnOpen = MkB("目录", false, (s, e) => { try { Process.Start("explorer.exe", "\"" + Core.Dir + "\""); } catch { } }));
-                pnl.Controls.Add(btnClear = MkB("清空", false, (s, e) => txtLog.Clear()));
+                pnl.Controls.Add(btnClear = MkB("清空", false, (s, e) => { txtLog.Clear(); if (lblLogEmpty != null) lblLogEmpty.Visible = true; }));
                 // 「复制」是为了让求助变得便宜: 以前同学出问题只能说"不好使",
                 // 现在点一下就拿到带时间戳的完整日志, 贴过来就能定位。
                 pnl.Controls.Add(btnCopyLog = MkB("复制", false, (s, e) => DoCopyLog()));
                 pnl.Controls.Add(btnInstall = MkB("换目录", false, (s, e) => DoInstallTo()));
                 pnl.Controls.Add(btnUninstall = MkB("卸载", false, (s, e) => DoUninstall()));
+                btnUninstall.DangerOnHover = true;   // 危险动作: 平时与普通按钮一致, 悬停才变红
                 pnl.Controls.Add(btnAbout = MkB("关于", false, (s, e) => ShowAbout()));
             });
             root.Controls.Add(pnlButtons, 0, 3);
@@ -920,6 +920,14 @@ namespace Sicau
             tips.SetToolTip(btnAbout, "关于 SICAU-AutoLogin");
             // 为了四个勾选项挤进一排，这项文字缩短了，全名放这里
             tips.SetToolTip(chkQuietPortal, "不自动弹出校园网登录页（改的是 Windows 的联网探测，需要管理员权限）");
+            // 输入框里的字放不下时会被截掉（学号 13 位、热点名 8 个字就顶到边），
+            // 光靠肉眼没法确认到底存了什么 → 悬停给全文。
+            // 注意要挂在 Inner（真正的 TextBox）上：挂在 InputBox 这层容器上，
+            // 鼠标停在框里时命中的是子控件，提示根本不弹。
+            tips.SetToolTip(txtUser.Inner, "学号（13 位）");
+            tips.SetToolTip(txtPass.Inner, "校园网密码（用 DPAPI 加密保存在本机，日志里不会出现明文）");
+            tips.SetToolTip(txtHotspotSsid.Inner, "热点名称。只连有线时要填，名字要和手机开的热点完全一致");
+            tips.SetToolTip(txtHotspotPass.Inner, "热点密码（至少 8 位）");
 
             // ---------------- 状态 ----------------
             lblStatus = new Label
@@ -939,7 +947,7 @@ namespace Sicau
                 Dock = DockStyle.Fill,
                 Padding = Theme.Pad(14, 10, 14, 10),
                 Margin = Theme.Pad(0, 0, 0, 8),
-                MinimumSize = new Size(0, Theme.Px(80))
+                MinimumSize = new Size(0, Theme.Px(132))
             };
             txtLog = new TextBox
             {
@@ -954,6 +962,22 @@ namespace Sicau
                 BorderStyle = BorderStyle.None
             };
             cardLog.Controls.Add(txtLog);
+
+            // 空态: 日志框是空的（第一次装、或点了「清空」）时，直接一片空白会让人以为程序没动。
+            // 用独立 Label 叠在上面，有内容就隐藏 —— 见 lblLogEmpty 字段注释。
+            lblLogEmpty = new Label
+            {
+                Text = "暂无记录，点「认证」开始",
+                Font = Fonts.UI,
+                ForeColor = Theme.InkFaint,
+                BackColor = Theme.CardSolid,
+                AutoSize = false,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Visible = false
+            };
+            cardLog.Controls.Add(lblLogEmpty);
+            lblLogEmpty.BringToFront();
             root.Controls.Add(cardLog, 0, 5);
 
             // ---------------- 底部 ----------------
@@ -1221,18 +1245,28 @@ namespace Sicau
             return g;
         }
 
+        /// <summary>让控件跟着所在列一起变宽（不改变高度）。
+        /// 网格是 4 列全 AutoSize：列宽由「最宽那一格」决定，其他格里的控件如果保持原宽，
+        /// 右边就留一段死区（实测学号框右沿到「密码」标签之间有 125px 空白）。
+        /// 套上这个之后，窄列里的控件也会铺满自己的格子。</summary>
+        static void Stretch(Control c)
+        {
+            if (c == null) return;
+            c.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+        }
+
         /// <summary>往指定页里放一行, 左右各一组「标签 + 控件」, 任一侧传 null 就留空。</summary>
         void PutRow(TableLayoutPanel g, int row, string labelL, Control cL, string labelR, Control cR)
         {
             if (labelL != null)
             {
                 g.Controls.Add(MakeLabel(labelL), 0, row);
-                if (cL != null) { cL.Margin = Theme.Pad(0, 0, 28, 6); g.Controls.Add(cL, 1, row); }
+                if (cL != null) { cL.Margin = Theme.Pad(0, 0, 28, 6); Stretch(cL); g.Controls.Add(cL, 1, row); }
             }
             if (labelR != null)
             {
                 g.Controls.Add(MakeLabel(labelR), 2, row);
-                if (cR != null) { cR.Margin = Theme.Pad(0, 0, 0, 6); g.Controls.Add(cR, 3, row); }
+                if (cR != null) { cR.Margin = Theme.Pad(0, 0, 0, 6); Stretch(cR); g.Controls.Add(cR, 3, row); }
             }
         }
 
@@ -1256,6 +1290,9 @@ namespace Sicau
             bool needSsid = idx == 2;
             if (lblSsid != null) lblSsid.Visible = needSsid;
             if (cboSsid != null && cboSsid.Parent != null) cboSsid.Parent.Visible = needSsid;
+            // 「WiFi 名称」整组藏起来时，右边三列（标签+两格控件）就空了 594px。
+            // 让「连接方式」横跨这三列把这一行铺满，切回「仅无线」再收成普通一格。
+            if (cboMode != null && grid != null) grid.SetColumnSpan(cboMode, needSsid ? 1 : 3);
             if (uiReady) AdaptSize();
         }
 
@@ -1362,9 +1399,18 @@ namespace Sicau
                 // 宽高直接以内容为准。
                 // 以前写的是 Math.Max(现值, 需要值) —— 只会变胖不会变瘦, 于是删掉页签条之后
                 // 窗口还停在原来那个尺寸, 白留一大片空白。
-                ClientSize = new Size(Math.Max(needW, Theme.Px(520)), Math.Max(fixedH, Theme.Px(360)));
+                int bw = Width - ClientSize.Width, bh = Height - ClientSize.Height;   // 边框/标题栏厚度
 
-                MinimumSize = new Size(Math.Max(Theme.Px(560), needW - Theme.Px(80)), Math.Min(fixedH, Theme.Px(560)));
+                // 最小宽度按「按钮排自然需求 + 余量」定：9 颗按钮一排实测 739 逻辑，
+                // 加左右 padding 36 与余量 20 ≈ 796。定死这个下限，窗口就**不能被拖到
+                // 按钮会溢出的宽度**（按钮排 WrapContents=false，溢出是静默裁掉，用户看不出丢了按钮）。
+                MinimumSize = new Size(
+                    Math.Max(Theme.Px(796), needW + bw),
+                    Math.Min(fixedH + bh, Theme.Px(560)));
+
+                ClientSize = new Size(
+                    Math.Max(needW, Math.Max(Theme.Px(520), MinimumSize.Width - bw)),
+                    Math.Max(fixedH, Theme.Px(360)));
 
                 Rectangle wa = Screen.FromControl(this).WorkingArea;
                 int w = Math.Min(ClientSize.Width, wa.Width - Theme.Px(24));
@@ -1726,7 +1772,7 @@ namespace Sicau
             {
                 Text = text,
                 Location = new Point(x, y),
-                Size = new Size(w, 32),
+                Size = new Size(Theme.Px(w), Theme.Px(32)),
                 FlatStyle = FlatStyle.System,
                 Font = FontUI
             };
@@ -1818,7 +1864,7 @@ namespace Sicau
                 Clipboard.SetText(text);
                 SetStatus("日志已复制到剪贴板", Theme.Ok);
             }
-            catch (Exception ex) { SetStatus("复制失败: " + ex.Message, Theme.Err); }
+            catch (Exception) { SetStatus("复制失败：剪贴板被别的程序占用，再点一次", Theme.Err); }
         }
 
         /// <summary>
@@ -1887,12 +1933,16 @@ namespace Sicau
             lastStatusColor = color;
             lblStatus.Text = "●  " + text;
             lblStatus.ForeColor = color;
+            // 状态行是 AutoSize，窄窗口下长状态（"认证中… 正在连接 portal.sicau.edu.cn"）
+            // 会被右边裁掉 → 悬停给全文。
+            if (tips != null) tips.SetToolTip(lblStatus, text);
         }
 
         void AppendLog(string line)
         {
             if (InvokeRequired) { BeginInvoke(new Action(() => AppendLog(line))); return; }
             txtLog.AppendText(line + Environment.NewLine);
+            if (lblLogEmpty != null && lblLogEmpty.Visible) lblLogEmpty.Visible = false;
         }
 
         void SetBusy(bool b)
@@ -2177,7 +2227,7 @@ namespace Sicau
                 catch (Exception ex)
                 {
                     AppendLog("修复热点失败: " + ex.Message);
-                    SetStatus("修复热点失败", Theme.Err);
+                    SetStatus("修复热点失败：需要管理员权限", Theme.Err);
                 }
                 finally { SetBusy(false); }
             });
@@ -2197,7 +2247,7 @@ namespace Sicau
                     SetStatus(on ? "已联网" : "未联网，需要认证", on ? Theme.Ok : Theme.Err);
                     SetTrayState(on);
                 }
-                catch (Exception ex) { AppendLog("检测失败: " + ex.Message); SetStatus("检测失败", Theme.Err); }
+                catch (Exception ex) { AppendLog("检测失败: " + ex.Message); SetStatus("检测失败：点「复制」把日志发出来", Theme.Err); }
                 finally { SetBusy(false); }
             });
         }
@@ -2242,7 +2292,7 @@ namespace Sicau
                         });
                     }
                 }
-                catch (Exception ex) { AppendLog("认证异常: " + ex.Message); SetStatus("认证异常", Theme.Err); }
+                catch (Exception ex) { AppendLog("认证异常: " + ex.Message); SetStatus("认证异常：点「认证」重试一次", Theme.Err); }
                 finally { SetBusy(false); }
             });
         }
@@ -2263,7 +2313,7 @@ namespace Sicau
                     else if (action == "off") SetStatus("热点已关闭", Theme.InkDim);
                     else SetStatus("热点状态已读取", Theme.InkDim);
                 }
-                catch (Exception ex) { AppendLog("热点操作失败: " + ex.Message); SetStatus("热点操作失败", Theme.Err); }
+                catch (Exception ex) { AppendLog("热点操作失败: " + ex.Message); SetStatus("热点操作失败：确认手机热点已打开", Theme.Err); }
                 finally { SetBusy(false); }
             });
         }
@@ -2404,7 +2454,7 @@ namespace Sicau
 
                 var pic = new PictureBox
                 {
-                    Size = new Size(96, 96),
+                    Size = new Size(Theme.Px(96), Theme.Px(96)),
                     SizeMode = PictureBoxSizeMode.Zoom,
                     BackColor = Theme.CardSolid,
                     Image = LoadAvatarImage(),
@@ -2436,13 +2486,13 @@ namespace Sicau
                 {
                     Text = "好",
                     Primary = true,
-                    MinimumSize = new Size(90, 32),
+                    MinimumSize = new Size(Theme.Px(90), Theme.Px(32)),
                     DialogResult = DialogResult.OK
                 };
                 ok.Click += (s, e) => f.Close();
 
                 // 检查更新: 只有用户点这个按钮才会去碰网络(不轮询、不静默下载)
-                var btnUpd = new Win11Button { Text = "检查更新", MinimumSize = new Size(96, 32) };
+                var btnUpd = new Win11Button { Text = "检查更新", MinimumSize = new Size(Theme.Px(96), Theme.Px(32)) };
                 var lblUpd = new Label
                 {
                     Text = "",
@@ -2450,7 +2500,7 @@ namespace Sicau
                     Font = Fonts.UI,
                     ForeColor = Theme.InkDim,
                     BackColor = Theme.CardSolid,
-                    MaximumSize = new Size(320, 0)
+                    MaximumSize = new Size(Theme.Px(320), 0)
                 };
                 bool gotNewer = false;
 
@@ -2573,34 +2623,49 @@ namespace Sicau
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 Dock = DockStyle.Fill,
-                Padding = new Padding(26, 22, 26, 20),
+                Padding = Theme.Pad(26, 22, 26, 20),
                 BackColor = Theme.Bg
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             for (int i = 0; i < 5; i++) root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             // ---- 标题 ----
-            var head = new Panel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, BackColor = Theme.Bg, Margin = new Padding(0, 0, 0, 16) };
-            var t = new Label { Text = "欢迎使用 校园网自动认证", Font = Fonts.Title, ForeColor = Theme.Ink, BackColor = Theme.Bg, AutoSize = true, Location = new Point(0, 0) };
+            // 原来是一个 Panel 里用 Location 手摆 (0,0) 和 (3,40)：那个 40 是写死的设备像素，
+            // 150% 缩放下 Fonts.Title 本身就有 60px 高，两行字直接叠在一起。
+            // 改成两行的 TableLayoutPanel：行高由内容决定，缩放到哪一档都不重叠。
+            var head = new TableLayoutPanel
+            {
+                ColumnCount = 1,
+                RowCount = 2,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = Theme.Bg,
+                Margin = Theme.Pad(0, 0, 0, 16)
+            };
+            head.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            head.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            head.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            var t = new Label { Text = "欢迎使用 校园网自动认证", Font = Fonts.Title, ForeColor = Theme.Ink, BackColor = Theme.Bg, AutoSize = true, Margin = Theme.Pad(0, 0, 0, 3) };
             var s = new Label
             {
                 Text = "填好学号和密码，点「开始使用」即可。\n之后每次开机都会自动认证，不用再手动登录。",
                 ForeColor = Theme.InkDim,
                 BackColor = Theme.Bg,
                 AutoSize = true,
-                Location = new Point(3, 40)
+                Margin = new Padding(0)
             };
-            head.Controls.Add(t);
-            head.Controls.Add(s);
+            head.Controls.Add(t, 0, 0);
+            head.Controls.Add(s, 0, 1);
             root.Controls.Add(head, 0, 0);
 
             // ---- 账号卡片 ----
             cardInfo = new CardPanel
             {
+                Dock = DockStyle.Fill,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Padding = new Padding(14, 10, 14, 4),
-                Margin = new Padding(0, 0, 0, 6)
+                Padding = Theme.Pad(14, 10, 14, 4),
+                Margin = Theme.Pad(0, 0, 0, 6)
             };
             var g = new TableLayoutPanel
             {
@@ -2619,8 +2684,8 @@ namespace Sicau
             txtP = new InputBox(300);
             txtP.Inner.UseSystemPasswordChar = true;
 
-            var l1 = new Label { Text = "学号", AutoSize = true, Anchor = AnchorStyles.Left, Font = Fonts.UI, ForeColor = Theme.Ink, BackColor = Theme.CardSolid, Margin = new Padding(0, 0, 16, 10) };
-            var l2 = new Label { Text = "密码", AutoSize = true, Anchor = AnchorStyles.Left, Font = Fonts.UI, ForeColor = Theme.Ink, BackColor = Theme.CardSolid, Margin = new Padding(0, 0, 16, 10) };
+            var l1 = new Label { Text = "学号", AutoSize = true, Anchor = AnchorStyles.Left, Font = Fonts.UI, ForeColor = Theme.Ink, BackColor = Theme.CardSolid, Margin = Theme.Pad(0, 0, 16, 10) };
+            var l2 = new Label { Text = "密码", AutoSize = true, Anchor = AnchorStyles.Left, Font = Fonts.UI, ForeColor = Theme.Ink, BackColor = Theme.CardSolid, Margin = Theme.Pad(0, 0, 16, 10) };
             g.Controls.Add(l1, 0, 0);
             g.Controls.Add(txtU, 1, 0);
             g.Controls.Add(l2, 0, 1);
@@ -2631,25 +2696,26 @@ namespace Sicau
             // ---- 环境检测卡片 ----
             cardDetect = new CardPanel
             {
+                Dock = DockStyle.Fill,
                 AutoSize = true,
                 AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                Padding = new Padding(20, 14, 20, 14),
-                Margin = new Padding(0, 0, 0, 16)
+                Padding = Theme.Pad(20, 14, 20, 14),
+                Margin = Theme.Pad(0, 0, 0, 16)
             };
             var dt = new TableLayoutPanel { ColumnCount = 1, RowCount = 2, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, BackColor = Theme.CardSolid, Margin = new Padding(0) };
             dt.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             dt.RowStyles.Add(new RowStyle(SizeType.AutoSize));
             dt.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-            var dtTitle = new Label { Text = "环境检测", Font = Fonts.UIBold, ForeColor = Theme.Ink, BackColor = Theme.CardSolid, AutoSize = true, Margin = new Padding(0, 0, 0, 6) };
-            lblDetect = new Label { Text = "正在检测…", ForeColor = Theme.InkDim, BackColor = Theme.CardSolid, AutoSize = true, MaximumSize = new Size(560, 0), Margin = new Padding(0) };
+            var dtTitle = new Label { Text = "环境检测", Font = Fonts.UIBold, ForeColor = Theme.Ink, BackColor = Theme.CardSolid, AutoSize = true, Margin = Theme.Pad(0, 0, 0, 6) };
+            lblDetect = new Label { Text = "正在检测…", ForeColor = Theme.InkDim, BackColor = Theme.CardSolid, AutoSize = true, MaximumSize = new Size(Theme.Px(560), 0), Margin = new Padding(0) };
             dt.Controls.Add(dtTitle, 0, 0);
             dt.Controls.Add(lblDetect, 0, 1);
             cardDetect.Controls.Add(dt);
             root.Controls.Add(cardDetect, 0, 2);
 
             // ---- 按钮 ----
-            var btnOk = new Win11Button { Text = "开始使用", Primary = true, MinimumSize = new Size(120, 36) };
-            var btnLater = new Win11Button { Text = "稍后手动设置", MinimumSize = new Size(130, 36) };
+            var btnOk = new Win11Button { Text = "开始使用", Primary = true, MinimumSize = new Size(Theme.Px(140), Theme.Px(32)) };
+            var btnLater = new Win11Button { Text = "稍后手动设置", MinimumSize = new Size(Theme.Px(140), Theme.Px(32)) };
             btnOk.Click += (a, b) => OkClick();
             btnLater.Click += (a, b) => { DialogResult = DialogResult.Cancel; Close(); };
             pnlBtns = new FlowLayoutPanel

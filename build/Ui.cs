@@ -79,6 +79,10 @@ namespace Sicau
         public static Color Hover       = Color.FromArgb(0xF7, 0xF7, 0xF7);
         public static Color Down        = Color.FromArgb(0xEE, 0xEE, 0xEE);
         public static Color BtnBg       = Color.FromArgb(0xFF, 0xFF, 0xFF);
+        // 禁用态底色：必须是**不透明实色**。以前禁用是用 Color.FromArgb(120, fill) 半透明叠在
+        // 卡片上，GDI 画文字时看到的是混合过的底，ClearType 会把笔画糊出彩边。
+        public static Color Disabled    = Color.FromArgb(0xEC, 0xEE, 0xF3);
+        public static Color DisabledOn  = Color.FromArgb(0x83, 0xAB, 0xFA);
         public static Color Ok          = Color.FromArgb(0x0F, 0x7B, 0x0F);
         public static Color Err         = Color.FromArgb(0xC4, 0x2B, 0x1C);
         public static Color Warn        = Color.FromArgb(0xB8, 0x86, 0x00);
@@ -97,8 +101,11 @@ namespace Sicau
                 BgTop       = Color.FromArgb(0xF7, 0xF8, 0xFB);
                 Card        = Color.FromArgb(0xFC, 0xFF, 0xFF, 0xFF);
                 CardSolid   = Color.FromArgb(0xFE, 0xFF, 0xFF);
-                CardBorder  = Color.FromArgb(26, 0x4C, 0x4F, 0x69);
-                InputBorder = Color.FromArgb(42, 0x4C, 0x4F, 0x69);
+                // 边框 alpha 2026-10-29 提高一档：26/42 折算只有 1.17:1 / 1.29:1，
+                // 亮色下等于看不见。40/65 约 2.0:1，不是去凑 3:1（那会画成深灰很脏），
+                // 只要「看得出这块能填」。
+                CardBorder  = Color.FromArgb(40, 0x4C, 0x4F, 0x69);
+                InputBorder = Color.FromArgb(65, 0x4C, 0x4F, 0x69);
                 FieldBg     = Color.FromArgb(0xF4, 0xF6, 0xFA);   // 亮色下卡片是 #FEFFFF, 输入框再白就分不出边界了
                 Accent      = Color.FromArgb(0x1E, 0x66, 0xF5);   // blue
                 AccentHover = Color.FromArgb(0x3B, 0x7B, 0xF6);
@@ -106,14 +113,18 @@ namespace Sicau
                 AccentInk   = Color.FromArgb(0xFF, 0xFF, 0xFF);
                 AccentSoft  = Color.FromArgb(26, 0x1E, 0x66, 0xF5);
                 Ink         = Color.FromArgb(0x4C, 0x4F, 0x69);   // text
-                InkDim      = Color.FromArgb(0x6C, 0x6F, 0x85);   // subtext
-                InkFaint    = Color.FromArgb(0x8C, 0x8F, 0xA1);   // overlay1
+                InkDim      = Color.FromArgb(0x62, 0x65, 0x7C);   // subtext (4.37→5.06:1)
+                InkFaint    = Color.FromArgb(0x71, 0x74, 0x8A);   // overlay1 加深到 4.6:1
                 Hover       = Color.FromArgb(0xE6, 0xE9, 0xEF);
                 Down        = Color.FromArgb(0xDC, 0xE0, 0xE8);
                 BtnBg       = Color.FromArgb(14, 0x4C, 0x4F, 0x69);
-                Ok          = Color.FromArgb(0x40, 0xA0, 0x2B);   // green
+                Disabled    = Color.FromArgb(0xF1, 0xF3, 0xF7);
+                DisabledOn  = Color.FromArgb(0x83, 0xAB, 0xFA);   // Primary 禁用: 淡强调底
+                // 下面三色 2026-10-29 加深：Ok/Warn/InkFaint 压在 #FEFFFF 卡片上时
+                // 对比度只有 3.34 / 2.61 / 3.20，低于 WCAG AA 的 4.5（状态字和淡说明字都读不清）。
+                Ok          = Color.FromArgb(0x2F, 0x74, 0x20);
                 Err         = Color.FromArgb(0xD2, 0x0F, 0x39);   // red
-                Warn        = Color.FromArgb(0xDF, 0x8E, 0x1D);   // yellow
+                Warn        = Color.FromArgb(0x8A, 0x5A, 0x0B);
                 Highlight   = Color.FromArgb(140, 0xFF, 0xFF, 0xFF);
                 Glow        = Color.FromArgb(22, 0x1E, 0x66, 0xF5);
             }
@@ -134,10 +145,12 @@ namespace Sicau
                 AccentSoft  = Color.FromArgb(40, 0x89, 0xB4, 0xFA);
                 Ink         = Color.FromArgb(0xCD, 0xD6, 0xF4);   // text
                 InkDim      = Color.FromArgb(0xA6, 0xAD, 0xC8);   // subtext0
-                InkFaint    = Color.FromArgb(0x7F, 0x84, 0x9C);   // overlay1
+                InkFaint    = Color.FromArgb(0x9A, 0xA0, 0xB8);   // overlay1 提亮到 4.5:1
                 Hover       = Color.FromArgb(0x33, 0x35, 0x4B);
                 Down        = Color.FromArgb(0x3B, 0x3D, 0x55);
                 BtnBg       = Color.FromArgb(24, 0xCD, 0xD6, 0xF4);
+                Disabled    = Color.FromArgb(0x2E, 0x30, 0x46);   // 深色禁用底(实色)
+                DisabledOn  = Color.FromArgb(0x5E, 0x76, 0xA6);   // 深色 Primary 禁用
                 Ok          = Color.FromArgb(0xA6, 0xE3, 0xA1);   // green
                 Err         = Color.FromArgb(0xF3, 0x8B, 0xA8);   // red
                 Warn        = Color.FromArgb(0xF9, 0xE2, 0xAF);   // yellow
@@ -836,7 +849,7 @@ namespace Sicau
             Width = Theme.Px(width);
             Height = Theme.Px(32);
             Margin = Theme.Pad(0, 0, 10, 10);
-            zoneW = Theme.Px(24);
+            zoneW = Theme.Px(20);
 
             inner = new TextBox
             {
@@ -983,6 +996,8 @@ namespace Sicau
         public bool Primary = false;
         public bool Segment = false;
         public bool Selected = false;
+        /// <summary>危险动作（如「卸载」）：平时与普通按钮一样，只有鼠标悬停时字和描边变 Theme.Err。</summary>
+        public bool DangerOnHover = false;
         bool hover, down;
 
         public Win11Button()
@@ -1039,11 +1054,14 @@ namespace Sicau
                 fill = down ? Theme.Down : (hover ? Theme.Hover : Theme.BtnBg);
                 line = hover ? Theme.InputBorder : Theme.CardBorder;
                 ink = Theme.Ink;
+                if (DangerOnHover && hover) { line = Theme.Err; ink = Theme.Err; }
             }
 
             if (!Enabled)
             {
-                fill = Color.FromArgb(120, fill);
+                // 实色，不用半透明。半透明填色会让 GDI 在混合底上画 ClearType 糊字（§22.7 老坑）。
+                fill = Primary ? Theme.DisabledOn : Theme.Disabled;
+                line = Primary ? Theme.DisabledOn : Theme.CardBorder;
                 ink = Theme.InkFaint;
             }
 
