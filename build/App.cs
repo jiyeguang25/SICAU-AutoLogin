@@ -70,9 +70,72 @@ namespace Sicau
             }
         }
 
+        static System.Threading.Mutex _inst;
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern bool BringWindowToTop(IntPtr hWnd);
+
+        /// 装/卸/热点是单次命令, 不管有没有正在跑的实例都得能跑
+        static bool IsOneShot(string[] args)
+        {
+            for (int i = 0; i < args.Length; i++)
+            {
+                string a = args[i].ToLowerInvariant();
+                if (a == "--install" || a == "--uninstall") return true;
+                if (a == "--hotspot" || a.StartsWith("--hotspot=")) return true;
+            }
+            return false;
+        }
+
+        /// 已有实例在跑: 把它的窗口叫到前台, 自己安静退出
+        static void WakeRunningInstance()
+        {
+            try
+            {
+                int self = System.Diagnostics.Process.GetCurrentProcess().Id;
+                string pname = System.Diagnostics.Process.GetCurrentProcess().ProcessName;
+                foreach (var p in System.Diagnostics.Process.GetProcessesByName(pname))
+                {
+                    try
+                    {
+                        if (p.Id == self) continue;
+                        var h = p.MainWindowHandle;
+                        if (h != IntPtr.Zero)
+                        {
+                            ShowWindow(h, 9);
+                            BringWindowToTop(h);
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+
         static void MainCore(string[] args)
         {
             Core.InitPaths();
+
+            // ---- 单实例：登录前跑的那个实例已经负责了认证, 登录后再拉起的这个直接退出 ----
+            if (!IsOneShot(args))
+            {
+                bool first = false;
+                try
+                {
+                    _inst = new System.Threading.Mutex(false, "Global\\SICAU-AutoLogin.single", out first);
+                    if (!first)
+                    {
+                        Core.Log("已在运行, 本次启动交给已有实例", "WARN");
+                        WakeRunningInstance();
+                        return;
+                    }
+                }
+                catch { }
+            }
+
             Core.RemoveLegacyTask();   // 老版本用计划任务自启, 被 Defender 判成恶意持久化, 见到就清掉
             Theme.InitScale();       // 先量出系统 DPI, 布局尺寸全靠它换算, 否则高分屏上字会被挤
             Theme.ApplyMode(Core.LoadCfg().Theme);   // 先定主题, 后面所有界面按它来画
