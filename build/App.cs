@@ -140,7 +140,7 @@ namespace Sicau
             Theme.InitScale();       // 先量出系统 DPI, 布局尺寸全靠它换算, 否则高分屏上字会被挤
             Theme.ApplyMode(Core.LoadCfg().Theme);   // 先定主题, 后面所有界面按它来画
 
-            bool auto = false, hotspotOnBoot = false, yes = false, doInstall = false, doUninstall = false;
+            bool auto = false, hotspotOnBoot = false, bootOnce = false, yes = false, doInstall = false, doUninstall = false;
             string hotspotAction = null;
             string installDir = null;
 
@@ -148,6 +148,7 @@ namespace Sicau
             {
                 string a = args[i].ToLowerInvariant();
                 if (a == "--auto") auto = true;
+                else if (a == "--boot-once") bootOnce = true;
                 else if (a == "--hotspot-on-boot") hotspotOnBoot = true;
                 else if (a == "--yes" || a == "-y") yes = true;
                 else if (a == "--install")
@@ -222,9 +223,13 @@ namespace Sicau
 
                 var cfg = Core.LoadCfg();
                 Core.Log("--------------------------------------------------");
-                bool trayMode = MainForm.WantTray(cfg.BootMode);
-                Core.Log("开机自动认证: 静默认证, 成功后"
-                         + (trayMode ? "留在托盘继续监测" : "直接退出") + ", 失败才弹窗");
+                // 登录前跑（--boot-once）：只负责认证，认证完就退。
+                // 不能留在 session 0 里驻留——那时没有桌面，界面起不来，
+                // 还会挡住登录后那一次正常启动（互斥体被占用）。
+                bool trayMode = bootOnce ? false : MainForm.WantTray(cfg.BootMode);
+                Core.Log("开机自动认证: " + (bootOnce ? "登录前跑一次, 认证完就退出" : "静默认证")
+                         + ", 成功后" + (trayMode ? "留在托盘继续监测" : "直接退出")
+                         + ", 失败" + (bootOnce ? "只记日志不弹窗" : "才弹窗"));
 
                 // 开机自启坏了(指向的程序被删掉/被搬走)要留下痕迹, 并顺手指回当前程序
                 try
@@ -297,6 +302,12 @@ namespace Sicau
                 }
 
                 // 没成功才弹窗, 让用户看到到底卡在哪
+                if (bootOnce)
+                {
+                    // 登录前跑的这一轮没有桌面, 弹窗没人看得见, 还会把进程挂住
+                    Core.Log("认证未成功, 登录前不弹窗, 只记日志; 登录后会再试一次");
+                    return;
+                }
                 Core.Log("认证未成功, 弹出提示窗口");
                 bool stay = false;
                 try
